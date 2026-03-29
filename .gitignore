@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.log
+*.err
+.DS_Store
+.idea/
+.vscode/
+*.db
+*.db-shm
+*.db-wal
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+audit.pcap

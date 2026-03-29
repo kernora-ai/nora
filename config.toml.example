@@ -1,0 +1,77 @@
+# Kernora — AI Work Intelligence
+# Elastic License 2.0 — commercial use requires agreement with kernora.ai
+#
+# Copy to ~/.kernora/config.toml  (install.sh does this automatically)
+
+[mode]
+type = "byok"
+# "byok"   = your key, your machine — zero bytes to Kernora (default)
+# "team"   = local analysis + structured sync to your S3 bucket (Phase 1)
+
+[model]
+provider = "auto"
+# "auto"      = detects all available keys, picks best model per tier (RECOMMENDED)
+# "anthropic" = ANTHROPIC_API_KEY → Sonnet 4.6 (deep) + Haiku 4.5 (classify)
+# "google"    = GEMINI_API_KEY → Gemini 3.1 Pro (deep) + Gemini 3 Flash (classify)
+# "openai"    = OPENAI_API_KEY → GPT-4o (deep) + GPT-4o-mini (classify)
+# "bedrock"   = AWS profile → Nova Pro (adequate) + Nova Lite (basic)
+# "grok"      = XAI_API_KEY → Grok Beta
+# "ollama"    = localhost:11434 → local models (free but limited quality)
+#
+# Tiered Model Strategy:
+#   Kernora auto-selects two models based on available API keys:
+#   DEEP model    — best available (Sonnet/Gemini Pro/GPT-4o) for playbooks,
+#                   architectural decisions, effective prompts, anti-patterns
+#   CLASSIFY model — cheapest adequate (Haiku/Flash/4o-mini) for session_type,
+#                    themes, bugs, summary
+#
+# Capability scores (1-5 for structured JSON extraction):
+#   5: Sonnet 4.6, Gemini 3.1 Pro, Gemini 2.5 Pro, GPT-4o
+#   4: Haiku 4.5, Gemini 3 Flash, Gemini 2.5 Flash, GPT-4o-mini
+#   3: Nova Pro, Grok Beta, Gemini 3.1 Flash Lite
+#   2: Nova Lite, Gemini 2.5 Flash Lite, Llama 3.2 8B
+#   1: Nova Micro, Llama 3.2 3B — flagged as insufficient
+#
+# Multiple keys = better results. Kernora picks the best available per tier.
+
+[bedrock]
+region = "us-east-1"
+model  = "amazon.nova-pro-v1:0"
+
+[google]
+model = "gemini-3.1-pro-preview"
+
+[openai]
+model = "gpt-4o"
+
+[grok]
+model = "grok-beta"
+
+[ollama]
+model = "llama3.2:8b"
+host  = "http://localhost:11434"
+
+[analysis]
+run_every_minutes  = 60
+max_sessions_per_run = 20
+
+[dashboard]
+port     = 2742
+auto_open = true
+
+[privacy]
+verified = true
+# Confirms Kernora receives zero data in byok mode.
+# Verified by network audit during install.
+
+[swarm]
+type = "byok_s3"
+# "byok_s3" = You own the S3 Bucket infrastructure explicitly.
+# "kernora_managed" = Auto-provisioned zero-friction bucket natively within Kernora Enterprise AWS.
+director_mode = false
+bucket = "kernora-enterprise-swarm"
+region = "us-east-1"
+
+[aws]
+access_key = ""
+secret_key = ""
