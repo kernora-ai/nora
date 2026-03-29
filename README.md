@@ -35,8 +35,9 @@ Then install a **claw** — the lightweight adapter for your coding agent:
 | Agent | Claw | Install |
 |-------|------|---------|
 | Claude Code | [claude-claw](https://github.com/kernora/claude-claw) | `claude plugin add kernora/claude-claw` |
-| Kiro | kiro-claw | Coming soon |
+| Kiro | [kiro-claw](https://github.com/kernora/kiro-claw) | `ext install kernora.kiro-claw` |
 | Cursor | cursor-claw | Coming soon |
+| VS Code (base) | [vscode-claw](https://github.com/kernora/vscode-claw) | For claw builders |
 | **Build your own** | [Claw Protocol →](docs/CLAW-PROTOCOL.md) | Any agent with transcripts |
 
 **That's it.** End a coding session. Within 60 seconds, Nora analyzes it and notifies you.
@@ -66,6 +67,10 @@ Dashboard at localhost:2742
 ---
 
 ## Architecture
+
+<p align="center">
+  <img src="docs/architecture-overview.svg" alt="Nora System Architecture" width="800"/>
+</p>
 
 Nora is the **engine** — it handles analysis, storage, the dashboard, and notifications. It knows nothing about any specific AI coding agent.
 
@@ -147,7 +152,7 @@ See [docs/CLAW-PROTOCOL.md](docs/CLAW-PROTOCOL.md) for the full spec. It's ~50 l
 - [x] Tiered model selection with auto-fallback
 - [x] Local dashboard (Flask + HTMX)
 - [x] Claude Code claw
-- [ ] Kiro claw
+- [x] Kiro claw (via vscode-claw base)
 - [ ] Cursor claw
 - [ ] Team intelligence (squad-level patterns for engineering managers)
 - [ ] Trend analysis (week-over-week prompt quality, bug recurrence)
