@@ -122,4 +122,4 @@ This validates the envelope format, runs both analysis phases, and prints the re
 
 ---
 
-Questions? Open an issue on [kernora/nora](https://github.com/kernora/nora/issues) or email hello@kernora.ai.
+Questions? Open an issue on [kernora/nora](https://github.com/kernora/nora-engine/issues) or email hello@kernora.ai.
