@@ -34,10 +34,10 @@ Then install a **claw** — the lightweight adapter for your coding agent:
 
 | Agent | Claw | Install |
 |-------|------|---------|
-| Claude Code | [claude-claw](https://github.com/kernora/claude-claw) | `claude plugin add kernora/claude-claw` |
-| Kiro | [kiro-claw](https://github.com/kernora/kiro-claw) | `ext install kernora.kiro-claw` |
+| Claude Code | [claude-claw](https://github.com/kernora-ai/claude-claw) | `claude plugin add kernora-ai/claude-claw` |
+| Kiro | [kiro-claw](https://github.com/kernora-ai/kiro-claw) | `ext install kernora-ai.kiro-claw` |
 | Cursor | cursor-claw | Coming soon |
-| VS Code (base) | [vscode-claw](https://github.com/kernora/vscode-claw) | For claw builders |
+| VS Code (base) | [vscode-claw](https://github.com/kernora-ai/vscode-claw) | For claw builders |
 | **Build your own** | [Claw Protocol →](docs/CLAW-PROTOCOL.md) | Any agent with transcripts |
 
 **That's it.** End a coding session. Within 60 seconds, Nora analyzes it and notifies you.

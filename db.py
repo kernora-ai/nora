@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Kernora — AI Work Intelligence
 # Elastic License 2.0 — commercial use requires agreement with kernora.ai
-# https://github.com/kernora/nora/blob/main/LICENSE
+# https://github.com/kernora-ai/nora/blob/main/LICENSE
 import json
 import sqlite3
 from pathlib import Path
