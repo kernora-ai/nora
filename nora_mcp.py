@@ -27,9 +27,10 @@ SECURITY: Read-only access to local echo.db except for analysis storage (nora_st
 """
 
 import json
+import re
 import sqlite3
 import subprocess
-import sys
+import sys as _sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -39,12 +40,17 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+# Local imports
+_sys.path.insert(0, str(Path(__file__).parent))
+from analyzer import phase1_extract, condense_transcript, _format_metadata_for_prompt, PROMPT
+from db import store_session as db_store_session, mark_analyzed as db_mark_analyzed, get_conn
+
 
 # Configuration
 DB_PATH = Path.home() / ".kernora" / "echo.db"
 SPOOL_DIR = Path.home() / ".kernora" / "spool"
 STEERING_DIR = Path.home() / ".kiro" / "steering"
-DB_TIMEOUT = 2  # seconds
+DB_TIMEOUT = 5  # seconds
 
 
 class NoraServer:
@@ -271,6 +277,7 @@ class NoraServer:
             )
         conn = sqlite3.connect(str(DB_PATH), timeout=DB_TIMEOUT)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
     # ── Search ───────────────────────────────────────────────────────────────
@@ -279,6 +286,12 @@ class NoraServer:
         """Search across patterns, decisions, bugs, insights via FTS5."""
         if not query or not query.strip():
             return "Please provide a search query."
+
+        # Sanitize FTS5 query — strip special operators that cause parse errors
+        safe_query = re.sub(r'[^\w\s]', ' ', query).strip()
+        if not safe_query:
+            return "Please provide a search query with alphanumeric terms."
+
         try:
             conn = self._connect_db()
             cursor = conn.cursor()
@@ -295,7 +308,7 @@ class NoraServer:
                 try:
                     cursor.execute(
                         f"SELECT {', '.join(fields)} FROM {fts_table} WHERE {fts_table} MATCH ? LIMIT 5",
-                        (query,),
+                        (safe_query,),
                     )
                     for row in cursor.fetchall():
                         results[category].append(dict(zip(fields, row)))
@@ -304,7 +317,7 @@ class NoraServer:
                     like_col = fields[0]
                     cursor.execute(
                         f"SELECT {', '.join(fields)} FROM {source_table} WHERE {like_col} LIKE ? LIMIT 5",
-                        (f"%{query}%",),
+                        (f"%{safe_query}%",),
                     )
                     for row in cursor.fetchall():
                         results[category].append(dict(zip(fields, row)))
@@ -338,14 +351,18 @@ class NoraServer:
             conn = self._connect_db()
             cursor = conn.cursor()
 
-            query = "SELECT pattern, effectiveness, domains, context FROM patterns WHERE effectiveness >= ?"
-            params: list = [min_effectiveness]
-
             if project:
-                query += " AND project = ?"
-                params.append(project)
+                query = """SELECT p.pattern, p.effectiveness, p.domains, p.context
+                           FROM patterns p
+                           JOIN insights i ON p.session_id = i.session_id
+                           JOIN sessions s ON i.session_id = s.id
+                           WHERE p.effectiveness >= ? AND s.project LIKE ?
+                           ORDER BY p.effectiveness DESC LIMIT 20"""
+                params = [min_effectiveness, f"%{project}%"]
+            else:
+                query = "SELECT pattern, effectiveness, domains, context FROM patterns WHERE effectiveness >= ? ORDER BY effectiveness DESC LIMIT 20"
+                params = [min_effectiveness]
 
-            query += " ORDER BY effectiveness DESC LIMIT 20"
             cursor.execute(query, params)
             rows = cursor.fetchall()
             conn.close()
@@ -377,9 +394,12 @@ class NoraServer:
 
             if project:
                 cursor.execute(
-                    "SELECT decision, rationale, alternatives, created_at FROM decisions "
-                    "WHERE project = ? ORDER BY created_at DESC LIMIT 20",
-                    (project,),
+                    """SELECT d.decision, d.rationale, d.alternatives, d.created_at
+                       FROM decisions d
+                       JOIN insights i ON d.session_id = i.session_id
+                       JOIN sessions s ON i.session_id = s.id
+                       WHERE s.project LIKE ? ORDER BY d.created_at DESC LIMIT 20""",
+                    (f"%{project}%",),
                 )
             else:
                 cursor.execute(
@@ -687,32 +707,6 @@ class NoraServer:
              ingested by the daemon (e.g., daemon was offline)
           2. Database — sessions ingested but not yet analyzed (analyzed=0)
         """
-        # ── Import analyzer functions (Phase 1 is pure Python, zero deps) ──
-        try:
-            analyzer_path = Path.home() / ".kernora" / "app" / "analyzer.py"
-            if not analyzer_path.exists():
-                # Fallback: maybe running from repo checkout
-                analyzer_path = Path(__file__).parent / "analyzer.py"
-            if not analyzer_path.exists():
-                return (
-                    "Analyzer module not found. Run install.sh to set up Nora, "
-                    "or ensure ~/.kernora/app/analyzer.py exists."
-                )
-
-            # Dynamic import from the known path
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("analyzer", str(analyzer_path))
-            if spec is None or spec.loader is None:
-                return "Failed to load analyzer module."
-            analyzer = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(analyzer)  # type: ignore[union-attr]
-
-            phase1_extract = analyzer.phase1_extract
-            condense_transcript = analyzer.condense_transcript
-            format_metadata = analyzer._format_metadata_for_prompt
-            PROMPT = analyzer.PROMPT
-        except Exception as e:
-            return f"Failed to load analyzer: {e}"
 
         # ── Source 1: Check spool directory for pending session files ──
         session_id = ""
@@ -765,7 +759,7 @@ class NoraServer:
 
         # ── Run Phase 1 (deterministic, zero cost) ──
         phase1 = phase1_extract(turns)
-        metadata = format_metadata(phase1)
+        metadata = _format_metadata_for_prompt(phase1)
         transcript = condense_transcript(phase1, max_tokens=8000)
 
         # ── Build the prompt for the agent ──
@@ -836,16 +830,7 @@ class NoraServer:
                         spool_file = sf
                         # Ingest into DB
                         try:
-                            db_path = Path.home() / ".kernora" / "app" / "db.py"
-                            if not db_path.exists():
-                                db_path = Path(__file__).parent / "db.py"
-
-                            import importlib.util
-                            spec = importlib.util.spec_from_file_location("db", str(db_path))
-                            if spec and spec.loader:
-                                db_mod = importlib.util.module_from_spec(spec)
-                                spec.loader.exec_module(db_mod)  # type: ignore[union-attr]
-                                db_mod.store_session(payload)
+                            db_store_session(payload)
                         except Exception as e:
                             return f"Error ingesting spool session: {e}"
                         break
@@ -864,21 +849,11 @@ class NoraServer:
             if row and row[0]:
                 try:
                     turns = json.loads(row[0])
-                    # Import phase1_extract
-                    analyzer_path = Path.home() / ".kernora" / "app" / "analyzer.py"
-                    if not analyzer_path.exists():
-                        analyzer_path = Path(__file__).parent / "analyzer.py"
-
-                    import importlib.util
-                    spec = importlib.util.spec_from_file_location("analyzer", str(analyzer_path))
-                    if spec and spec.loader:
-                        analyzer = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(analyzer)  # type: ignore[union-attr]
-                        phase1 = analyzer.phase1_extract(turns)
-                        # Inject Phase 1 deterministic data
-                        analysis.setdefault("tools_used", phase1.get("tools_used", {}))
-                        analysis.setdefault("files_touched", phase1.get("files_touched", []))
-                        analysis.setdefault("commands_run", phase1.get("commands_run", []))
+                    phase1 = phase1_extract(turns)
+                    # Inject Phase 1 deterministic data
+                    analysis.setdefault("tools_used", phase1.get("tools_used", {}))
+                    analysis.setdefault("files_touched", phase1.get("files_touched", []))
+                    analysis.setdefault("commands_run", phase1.get("commands_run", []))
                 except (json.JSONDecodeError, Exception):
                     pass
         except Exception:
@@ -886,17 +861,7 @@ class NoraServer:
 
         # ── Store in DB via mark_analyzed ──
         try:
-            db_path = Path.home() / ".kernora" / "app" / "db.py"
-            if not db_path.exists():
-                db_path = Path(__file__).parent / "db.py"
-
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("db", str(db_path))
-            if spec is None or spec.loader is None:
-                return "Error: db module not found."
-            db_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(db_mod)  # type: ignore[union-attr]
-            db_mod.mark_analyzed(session_id, analysis)
+            db_mark_analyzed(session_id, analysis)
         except Exception as e:
             return f"Error storing analysis: {e}"
 
