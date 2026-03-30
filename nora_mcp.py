@@ -209,7 +209,7 @@ class NoraServer:
                             },
                             "analysis": {
                                 "type": "object",
-                                "description": "Your analysis JSON with: session_type, workflow_stage, summary, themes, bugs, optimizations, playbook, architectural_decisions, effective_prompts, anti_patterns, claude_md_rules, knowledge_domains, reusable_patterns, prompt_quality, prompt_avg_words, repetition_count.",
+                                "description": "Your analysis JSON with: session_type, workflow_stage, summary, themes, bugs, optimizations, playbook, architectural_decisions, effective_prompts, anti_patterns, project_rules, knowledge_domains, reusable_patterns, prompt_quality, prompt_avg_words, repetition_count.",
                             },
                         },
                         "required": ["session_id", "analysis"],
@@ -1038,10 +1038,10 @@ class NoraServer:
                     out += f"- {r[0]}: {r[1]}\n"
                 out += "\n"
 
-            # ── CLAUDE.md rules ──
+            # ── project rules ──
             rows = c.execute(
-                "SELECT claude_md_rules FROM insights "
-                "WHERE claude_md_rules IS NOT NULL AND claude_md_rules != '[]' "
+                "SELECT project_rules FROM insights "
+                "WHERE project_rules IS NOT NULL AND project_rules != '[]' "
                 "ORDER BY analyzed_at DESC LIMIT 10"
             ).fetchall()
             all_rules = []  # type: List[str]
@@ -1054,7 +1054,7 @@ class NoraServer:
                 except (json.JSONDecodeError, TypeError):
                     pass
             if all_rules:
-                out += f"## CLAUDE.md Rules ({len(all_rules)} distilled)\n\n"
+                out += f"## Project Rules ({len(all_rules)} distilled)\n\n"
                 for rule in all_rules[:8]:
                     out += f"- {rule}\n"
                 out += "\n"

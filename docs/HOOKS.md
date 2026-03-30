@@ -458,7 +458,7 @@ Effective patterns and playbooks from past sessions. Includes:
 Kiro injects a summary into every agent prompt: "Reference patterns from X past sessions."
 
 ### nora-decisions.md
-Architectural decisions and CLAUDE.md-style rules. Includes:
+Architectural decisions and project rules. Includes:
 - Database schema decisions
 - API design patterns
 - Module organization rationale

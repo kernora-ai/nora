@@ -104,7 +104,7 @@ def init_db():
             content='reported_bugs', content_rowid='id'
         );
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_insights USING fts5(
-            summary, themes, playbook, anti_patterns, claude_md_rules,
+            summary, themes, playbook, anti_patterns, project_rules,
             knowledge_domains, reusable_patterns,
             content='insights', content_rowid='id'
         );
@@ -130,7 +130,7 @@ def init_db():
         "architectural_decisions": "TEXT DEFAULT '[]'",
         "effective_prompts":       "TEXT DEFAULT '[]'",
         "anti_patterns":           "TEXT DEFAULT '[]'",
-        "claude_md_rules":         "TEXT DEFAULT '[]'",
+        "project_rules":         "TEXT DEFAULT '[]'",
         "knowledge_domains":       "TEXT DEFAULT '[]'",
         "tools_used":              "TEXT DEFAULT '{}'",
         "files_touched":           "TEXT DEFAULT '[]'",
@@ -192,7 +192,7 @@ def mark_analyzed(session_id: str, insight: dict):
              prompt_quality, prompt_avg_words, repetition_count,
              skill_opportunity, summary, token_cost,
              session_type, playbook, architectural_decisions,
-             effective_prompts, anti_patterns, claude_md_rules,
+             effective_prompts, anti_patterns, project_rules,
              knowledge_domains, tools_used, files_touched,
              commands_run, reusable_patterns, workflow_stage)
         VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -214,7 +214,7 @@ def mark_analyzed(session_id: str, insight: dict):
         json.dumps(insight.get("architectural_decisions", [])),
         json.dumps(insight.get("effective_prompts", [])),
         json.dumps(insight.get("anti_patterns", [])),
-        json.dumps(insight.get("claude_md_rules", [])),
+        json.dumps(insight.get("project_rules", [])),
         json.dumps(insight.get("knowledge_domains", [])),
         json.dumps(insight.get("tools_used", {})),
         json.dumps(insight.get("files_touched", [])),

@@ -290,7 +290,7 @@ def index():
     # Deep extraction metrics
     try:
         insight_rows = db.execute(
-            "SELECT skill_opportunity, session_type, claude_md_rules, "
+            "SELECT skill_opportunity, session_type, project_rules, "
             "playbook, effective_prompts, anti_patterns, knowledge_domains "
             "FROM insights WHERE summary IS NOT NULL AND summary != '' AND summary != 'Empty session.'"
         ).fetchall()
@@ -305,7 +305,7 @@ def index():
         if r["skill_opportunity"]:
             nora_rules += 1
         try:
-            rules = json.loads(r["claude_md_rules"] or "[]")
+            rules = json.loads(r["project_rules"] or "[]")
             nora_rules += len([x for x in rules if x])
         except Exception:
             pass
@@ -361,7 +361,7 @@ def index():
         if r["skill_opportunity"]:
             top_rules.append(r["skill_opportunity"])
         try:
-            for rule in json.loads(r["claude_md_rules"] or "[]"):
+            for rule in json.loads(r["project_rules"] or "[]"):
                 if isinstance(rule, str) and rule.strip():
                     top_rules.append(rule.strip())
         except Exception:
@@ -506,11 +506,11 @@ def session_detail(session_id):
             )
             cards.append(f'<div class="card"><h3>Anti-Patterns</h3>{items}</div>')
 
-        # CLAUDE.md rules
-        rules = _json_list(i.get("claude_md_rules"))
+        # project rules
+        rules = _json_list(i.get("project_rules"))
         if rules:
             items = "".join(f'<div class="rule">{html.escape(str(r))}</div>' for r in rules if r)
-            cards.append(f'<div class="card"><h3>CLAUDE.md Rule Suggestions</h3>{items}</div>')
+            cards.append(f'<div class="card"><h3>Project Rule Suggestions</h3>{items}</div>')
 
         # Tools used
         tools = _json_dict(i.get("tools_used"))
@@ -613,7 +613,7 @@ def learnings():
         return shell("Learnings", "<p style='color:#2e4460'>No data.</p>", "Learnings")
     rows = db.execute(
         "SELECT skill_opportunity, summary, session_id, session_type, "
-        "claude_md_rules, effective_prompts, anti_patterns, playbook, "
+        "project_rules, effective_prompts, anti_patterns, playbook, "
         "reusable_patterns, knowledge_domains FROM insights "
         "ORDER BY id DESC LIMIT 30"
     ).fetchall()
@@ -625,10 +625,10 @@ def learnings():
         except Exception:
             return []
 
-    # ── Aggregate CLAUDE.md rules across all sessions ──
+    # ── Aggregate project rules across all sessions ──
     all_rules = []
     for r in rows:
-        rules = _jl(r["claude_md_rules"])
+        rules = _jl(r["project_rules"])
         for rule in rules:
             if isinstance(rule, str) and rule.strip():
                 all_rules.append(rule.strip())
@@ -701,7 +701,7 @@ def learnings():
     )
 
     content = f"""
-    <h3>CLAUDE.md Rules ({len(all_rules)} distilled)</h3>
+    <h3>Project Rules ({len(all_rules)} distilled)</h3>
     {rules_html or "<p style='color:#2e4460'>No rules yet.</p>"}
 
     <h3 style="margin-top:1rem">Effective Prompts</h3>

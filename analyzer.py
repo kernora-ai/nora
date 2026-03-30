@@ -64,7 +64,7 @@ Required JSON format:
   "architectural_decisions": [{{"decision": "what was decided", "context": "why", "alternatives_considered": "what else was weighed"}}],
   "effective_prompts": [{{"prompt": "the user prompt that worked well", "why_effective": "what made it good"}}],
   "anti_patterns": [{{"pattern": "what went wrong", "impact": "wasted time|bugs|rework", "fix": "how to avoid next time"}}],
-  "claude_md_rules": ["CLAUDE.md rule suggestions — things that should be codified as project rules based on this session"],
+  "project_rules": ["Project rule suggestions — conventions that should be codified as steering rules based on this session"],
   "knowledge_domains": ["list of technical domains exercised: e.g. swift, flask, sqlite, launchd, htmx, git, etc."],
   "reusable_patterns": [{{"pattern": "reusable technique or approach discovered", "context": "when to apply it"}}],
   "prompt_quality": 0.0,
@@ -79,7 +79,7 @@ Scoring rules:
 - architectural_decisions: real decisions with tradeoffs, not just "used Python"
 - effective_prompts: prompts that produced excellent results on first try — max 3
 - anti_patterns: things the human or AI did that caused rework — max 3
-- claude_md_rules: max 5 rules. Format as imperative sentences. Focus on project-specific conventions, not generic advice.
+- project_rules: max 5 rules. Format as imperative sentences. Focus on project-specific conventions, not generic advice.
 - prompt_quality: 0.0-1.0 (1.0 = precise, contextual, gives AI everything it needs)
 - repetition_count: how many turns repeated/clarified something already said
 - If session is empty or too short: return all empty arrays/strings, quality 0.0, summary "Empty session."
@@ -671,13 +671,13 @@ def analyze(session: dict) -> dict:
         "architectural_decisions": llm_result.get("architectural_decisions", []),
         "effective_prompts":       llm_result.get("effective_prompts", []),
         "anti_patterns":           llm_result.get("anti_patterns", []),
-        "claude_md_rules":         llm_result.get("claude_md_rules", []),
+        "project_rules":         llm_result.get("project_rules", []),
         "knowledge_domains":       llm_result.get("knowledge_domains", []),
         "reusable_patterns":       llm_result.get("reusable_patterns", []),
         "prompt_quality":          float(llm_result.get("prompt_quality", 0)),
         "prompt_avg_words":        int(llm_result.get("prompt_avg_words", 0)),
         "repetition_count":        int(llm_result.get("repetition_count", 0)),
-        "skill_opportunity":       _best_rule(llm_result.get("claude_md_rules", [])),
+        "skill_opportunity":       _best_rule(llm_result.get("project_rules", [])),
         # Phase 1 (deterministic — overrides any LLM guesses)
         "tools_used":              phase1["tools_used"],
         "files_touched":           phase1["files_touched"],
@@ -689,7 +689,7 @@ def analyze(session: dict) -> dict:
 
 
 def _best_rule(rules: list) -> str:
-    """Pick the single best CLAUDE.md rule from the list (for backward compat)."""
+    """Pick the single best project rule from the list (for skill_opportunity)."""
     if not rules:
         return ""
     # Prefer longer, more specific rules
@@ -702,7 +702,7 @@ def _empty_result(model: str) -> dict:
         "session_type": "", "workflow_stage": "", "summary": "Empty session.",
         "themes": [], "bugs": [], "optimizations": [],
         "playbook": "", "architectural_decisions": [], "effective_prompts": [],
-        "anti_patterns": [], "claude_md_rules": [], "knowledge_domains": [],
+        "anti_patterns": [], "project_rules": [], "knowledge_domains": [],
         "reusable_patterns": [],
         "prompt_quality": 0.0, "prompt_avg_words": 0, "repetition_count": 0,
         "skill_opportunity": "",
