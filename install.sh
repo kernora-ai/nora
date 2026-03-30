@@ -1,15 +1,10 @@
 #!/bin/bash
-# Kernora — AI Work Intelligence
+# Nora — AI Session Intelligence Engine
 # Elastic License 2.0 — commercial use requires agreement with kernora.ai
-# https://github.com/kernora/kernora/blob/main/LICENSE
+# https://github.com/kernora-ai/nora
 set -e
 
 KERNORA_DIR="$HOME/.kernora"
-HOOK_DIR="$HOME/.claude/hooks"
-KIRO_HOOK_DIR="$HOME/.kiro/hooks"
-KIRO_STEERING_DIR="$HOME/.kiro/steering"
-SETTINGS="$HOME/.claude/settings.json"
-KIRO_SETTINGS="$HOME/.kiro/settings.json"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 
@@ -38,7 +33,7 @@ echo "→ Installing dependencies..."
 echo "✓ Dependencies installed"
 
 # ── 3. Directories ────────────────────────────────────────────────────────────
-mkdir -p "$KERNORA_DIR/logs" "$KERNORA_DIR/spool"
+mkdir -p "$KERNORA_DIR/logs" "$KERNORA_DIR/spool" "$KERNORA_DIR/app"
 echo "✓ Created ~/.kernora/"
 
 # ── 4. Config (skip if already exists) ───────────────────────────────────────
@@ -78,155 +73,52 @@ else
     echo "✓ Config already exists — keeping ~/.kernora/config.toml"
 fi
 
-# ── 5. Claude Code hooks ─────────────────────────────────────────────────────
-mkdir -p "$HOOK_DIR"
-cp "$REPO_DIR/hook.py" "$HOOK_DIR/kernora_hook.py"
-cp "$REPO_DIR/nora_context.py" "$HOOK_DIR/nora_context.py"
-cp "$REPO_DIR/kiro_spec_shield.py" "$HOOK_DIR/nora_pretool.py"
-cp "$REPO_DIR/kiro_post_tool.py" "$HOOK_DIR/nora_posttool.py"
-cp "$REPO_DIR/nora_session_start.py" "$HOOK_DIR/nora_session_start.py"
-cp "$REPO_DIR/nora_precompact.py" "$HOOK_DIR/nora_precompact.py"
-chmod +x "$HOOK_DIR/kernora_hook.py" "$HOOK_DIR/nora_context.py" "$HOOK_DIR/nora_pretool.py" "$HOOK_DIR/nora_posttool.py" "$HOOK_DIR/nora_session_start.py" "$HOOK_DIR/nora_precompact.py"
-echo "✓ Hooks installed at ~/.claude/hooks/"
-echo "  → nora_context.py (context injection on UserPromptSubmit)"
-echo "  → nora_pretool.py (anti-pattern blocking on PreToolUse)"
-echo "  → nora_posttool.py (error matching on PostToolUse)"
-echo "  → nora_session_start.py (project context on SessionStart)"
-echo "  → nora_precompact.py (context save on PreCompact)"
-echo "  → kernora_hook.py (session capture on Stop)"
+# ── 5. Copy engine files to ~/.kernora/app/ ──────────────────────────────────
+for f in daemon.py analyzer.py db.py dashboard.py notifier.py nora_mcp.py cli_shield.py; do
+    [ -f "$REPO_DIR/$f" ] && cp "$REPO_DIR/$f" "$KERNORA_DIR/app/$f"
+done
+echo "✓ Engine files installed at ~/.kernora/app/"
 
-# ── 6. Register hooks in Claude Code settings ────────────────────────────────
-STOP_HOOK="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/kernora_hook.py\",\"async\":true}]}"
-CONTEXT_HOOK="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_context.py\",\"timeout\":3}]}"
-PRETOOL_HOOK="{\"matcher\":\"Write|Edit|Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_pretool.py\",\"timeout\":5}]}"
-POSTTOOL_HOOK="{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_posttool.py\",\"async\":true}]}"
-SESSION_START_HOOK="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_session_start.py\",\"timeout\":5}]}"
-PRECOMPACT_HOOK="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_precompact.py\",\"timeout\":3}]}"
-if [ -f "$SETTINGS" ] && command -v jq &>/dev/null; then
-    # Append to existing settings cleanly
-    tmp=$(mktemp)
-    jq ".hooks.Stop += [$STOP_HOOK] | .hooks.UserPromptSubmit += [$CONTEXT_HOOK] | .hooks.PreToolUse += [$PRETOOL_HOOK] | .hooks.PostToolUse += [$POSTTOOL_HOOK] | .hooks.SessionStart += [$SESSION_START_HOOK] | .hooks.PreCompact += [$PRECOMPACT_HOOK]" "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
-    echo "✓ Hooks registered in ~/.claude/settings.json"
-elif [ ! -f "$SETTINGS" ]; then
-    mkdir -p "$(dirname "$SETTINGS")"
-    cat > "$SETTINGS" << SETTINGS_EOF
-{
-  "hooks": {
-    "UserPromptSubmit": [$CONTEXT_HOOK],
-    "PreToolUse": [$PRETOOL_HOOK],
-    "PostToolUse": [$POSTTOOL_HOOK],
-    "SessionStart": [$SESSION_START_HOOK],
-    "PreCompact": [$PRECOMPACT_HOOK],
-    "Stop": [$STOP_HOOK]
-  }
-}
-SETTINGS_EOF
-    echo "✓ Created ~/.claude/settings.json with Nora hooks"
-else
-    echo "⚠  jq not found. Add these hooks to ~/.claude/settings.json manually:"
-    echo "   UserPromptSubmit: $CONTEXT_HOOK"
-    echo "   PreToolUse: $PRETOOL_HOOK"
-    echo "   PostToolUse: $POSTTOOL_HOOK"
-    echo "   SessionStart: $SESSION_START_HOOK"
-    echo "   PreCompact: $PRECOMPACT_HOOK"
-    echo "   Stop: $STOP_HOOK"
-fi
-
-# ── 6b. Register Nora MCP server in Claude Code ─────────────────────────────
+# ── 6. Register Nora MCP server ─────────────────────────────────────────────
+# MCP server works with Claude Code, Claude Desktop, and any MCP-compatible client.
 MCP_CONFIG="$HOME/.claude/.mcp.json"
-NORA_MCP="{\"command\":\"$PYTHON\",\"args\":[\"$REPO_DIR/nora_mcp.py\"]}"
-if [ -f "$MCP_CONFIG" ] && command -v jq &>/dev/null; then
-    tmp=$(mktemp)
-    jq ".mcpServers.nora = $NORA_MCP" "$MCP_CONFIG" > "$tmp" && mv "$tmp" "$MCP_CONFIG"
-    echo "✓ Nora MCP server registered in ~/.claude/.mcp.json"
-elif [ ! -f "$MCP_CONFIG" ]; then
-    mkdir -p "$(dirname "$MCP_CONFIG")"
-    echo "{\"mcpServers\":{\"nora\":$NORA_MCP}}" | jq . > "$MCP_CONFIG"
-    echo "✓ Created ~/.claude/.mcp.json with Nora MCP server"
-else
-    echo "⚠  jq not found. Add Nora MCP to ~/.claude/.mcp.json manually."
-fi
-
-# ── 7. Kiro hooks (if Kiro is installed) ─────────────────────────────────────
-# Kiro uses the same stdin JSON contract as Claude Code.
-# We install ALL 5 hooks: agentSpawn, userPromptSubmit, preToolUse, postToolUse, stop
-KIRO_DETECTED=false
-if [ -d "$HOME/.kiro" ] || command -v kiro &>/dev/null; then
-    KIRO_DETECTED=true
-fi
-
-if [ "$KIRO_DETECTED" = true ]; then
-    mkdir -p "$KIRO_HOOK_DIR" "$KIRO_STEERING_DIR"
-    cp "$REPO_DIR/kiro_agent_spawn.py" "$KIRO_HOOK_DIR/nora_spawn.py"
-    cp "$REPO_DIR/nora_context.py" "$KIRO_HOOK_DIR/nora_context.py"
-    cp "$REPO_DIR/kiro_spec_shield.py" "$KIRO_HOOK_DIR/nora_pretool.py"
-    cp "$REPO_DIR/kiro_post_tool.py" "$KIRO_HOOK_DIR/nora_posttool.py"
-    cp "$REPO_DIR/hook.py" "$KIRO_HOOK_DIR/nora_stop.py"
-    chmod +x "$KIRO_HOOK_DIR"/*.py
-    echo "✓ Kiro hooks installed at ~/.kiro/hooks/"
-
-    # Register hooks in Kiro settings
-    KIRO_SPAWN="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_spawn.py\"}]}"
-    KIRO_PROMPT="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_context.py\",\"timeout\":3}]}"
-    KIRO_PRETOOL="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_pretool.py\",\"timeout\":5}]}"
-    KIRO_POSTTOOL="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_posttool.py\",\"async\":true}]}"
-    KIRO_STOP="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_stop.py\",\"async\":true}]}"
-
-    if [ -f "$KIRO_SETTINGS" ] && command -v jq &>/dev/null; then
+NORA_MCP="{\"command\":\"$PYTHON\",\"args\":[\"$KERNORA_DIR/app/nora_mcp.py\"]}"
+if command -v jq &>/dev/null; then
+    if [ -f "$MCP_CONFIG" ]; then
         tmp=$(mktemp)
-        jq ".hooks.agentSpawn += [$KIRO_SPAWN] | .hooks.userPromptSubmit += [$KIRO_PROMPT] | .hooks.preToolUse += [$KIRO_PRETOOL] | .hooks.postToolUse += [$KIRO_POSTTOOL] | .hooks.stop += [$KIRO_STOP]" "$KIRO_SETTINGS" > "$tmp" && mv "$tmp" "$KIRO_SETTINGS"
-        echo "✓ Kiro hooks registered in ~/.kiro/settings.json"
-    elif [ ! -f "$KIRO_SETTINGS" ]; then
-        mkdir -p "$(dirname "$KIRO_SETTINGS")"
-        cat > "$KIRO_SETTINGS" << KIRO_EOF
-{
-  "hooks": {
-    "agentSpawn": [$KIRO_SPAWN],
-    "userPromptSubmit": [$KIRO_PROMPT],
-    "preToolUse": [$KIRO_PRETOOL],
-    "postToolUse": [$KIRO_POSTTOOL],
-    "stop": [$KIRO_STOP]
-  }
-}
-KIRO_EOF
-        echo "✓ Created ~/.kiro/settings.json with Nora hooks"
+        jq ".mcpServers.nora = $NORA_MCP" "$MCP_CONFIG" > "$tmp" && mv "$tmp" "$MCP_CONFIG"
     else
-        echo "⚠  jq not found. Add Nora hooks to ~/.kiro/settings.json manually."
+        mkdir -p "$(dirname "$MCP_CONFIG")"
+        echo "{\"mcpServers\":{\"nora\":$NORA_MCP}}" | jq . > "$MCP_CONFIG"
     fi
-
-    # Generate initial steering files if DB has data
-    if [ -f "$KERNORA_DIR/echo.db" ]; then
-        "$PYTHON" "$REPO_DIR/steering_writer.py" 2>/dev/null && echo "✓ Kiro steering files generated" || true
-    fi
+    echo "✓ Nora MCP server registered in ~/.claude/.mcp.json"
 else
-    echo "→ Kiro not detected — skipping Kiro hooks"
+    echo "⚠  jq not found. Add Nora MCP to ~/.claude/.mcp.json manually:"
+    echo "   {\"mcpServers\":{\"nora\":$NORA_MCP}}"
 fi
 
-# ── 8. Initialize database ────────────────────────────────────────────────────
-"$PYTHON" "$REPO_DIR/db.py"
+# ── 7. Initialize database ──────────────────────────────────────────────────
+"$PYTHON" "$KERNORA_DIR/app/db.py"
 
-# ── 9. Stop any existing Kernora processes ────────────────────────────────────
+# ── 8. Stop any existing Nora processes ─────────────────────────────────────
 [ -f "$KERNORA_DIR/daemon.pid" ] && kill "$(cat "$KERNORA_DIR/daemon.pid")" 2>/dev/null && rm "$KERNORA_DIR/daemon.pid" || true
-pkill -f "kernora/dashboard.py" 2>/dev/null || true
+pkill -f "nora.*dashboard.py" 2>/dev/null || true
 
-# ── 10. Auto-start on login ───────────────────────────────────────────────────
+# ── 9. Auto-start on login ──────────────────────────────────────────────────
 if [ "$(uname)" = "Darwin" ]; then
     mkdir -p "$LAUNCH_AGENTS"
     WHOAMI=$(whoami)
 
-    # Collect API key for plist injection
-    # LaunchAgents don't inherit shell env — we must bake the key into the plist
     DETECTED_KEY="${ANTHROPIC_API_KEY:-}"
     if [ -z "$DETECTED_KEY" ]; then
         echo ""
         echo "→ No ANTHROPIC_API_KEY found in current shell."
-        echo "  Enter your Anthropic API key to inject into the background daemon,"
-        echo "  or press Enter to skip (use Bedrock/Ollama, or run kernora-fix.sh later):"
+        echo "  Enter your Anthropic API key for the background daemon,"
+        echo "  or press Enter to skip (use Bedrock/Ollama instead):"
         read -r -s DETECTED_KEY
         echo ""
     fi
 
-    # Build EnvironmentVariables block only if we have a key
     ENV_BLOCK=""
     if [ -n "$DETECTED_KEY" ]; then
         ENV_BLOCK="  <key>EnvironmentVariables</key>
@@ -234,10 +126,9 @@ if [ "$(uname)" = "Darwin" ]; then
     <key>ANTHROPIC_API_KEY</key>
     <string>${DETECTED_KEY}</string>
   </dict>"
-        echo "✓ API key will be injected into daemon LaunchAgent"
+        echo "✓ API key injected into daemon LaunchAgent"
     fi
 
-    # Daemon plist
     cat > "$LAUNCH_AGENTS/ai.kernora.daemon.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -247,7 +138,7 @@ if [ "$(uname)" = "Darwin" ]; then
   <key>ProgramArguments</key>
   <array>
     <string>${PYTHON}</string>
-    <string>${REPO_DIR}/daemon.py</string>
+    <string>${KERNORA_DIR}/app/daemon.py</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -258,7 +149,6 @@ ${ENV_BLOCK}
 </plist>
 PLIST
 
-    # Dashboard plist
     cat > "$LAUNCH_AGENTS/ai.kernora.dashboard.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -268,7 +158,7 @@ PLIST
   <key>ProgramArguments</key>
   <array>
     <string>${PYTHON}</string>
-    <string>${REPO_DIR}/dashboard.py</string>
+    <string>${KERNORA_DIR}/app/dashboard.py</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -280,19 +170,18 @@ PLIST
 
     launchctl load "$LAUNCH_AGENTS/ai.kernora.daemon.plist" 2>/dev/null || true
     launchctl load "$LAUNCH_AGENTS/ai.kernora.dashboard.plist" 2>/dev/null || true
-    echo "✓ Auto-start configured (LaunchAgents) — starts on every login"
+    echo "✓ Auto-start configured (LaunchAgents)"
 
 else
-    # Linux: start in background now
-    nohup "$PYTHON" "$REPO_DIR/daemon.py" > "$KERNORA_DIR/logs/daemon.log" 2>&1 &
+    nohup "$PYTHON" "$KERNORA_DIR/app/daemon.py" > "$KERNORA_DIR/logs/daemon.log" 2>&1 &
     echo $! > "$KERNORA_DIR/daemon.pid"
-    nohup "$PYTHON" "$REPO_DIR/dashboard.py" > "$KERNORA_DIR/logs/dashboard.log" 2>&1 &
+    nohup "$PYTHON" "$KERNORA_DIR/app/dashboard.py" > "$KERNORA_DIR/logs/dashboard.log" 2>&1 &
     echo "✓ Daemon + dashboard started (Linux)"
 fi
 
 sleep 2
 
-# ── 11. Smoke test ───────────────────────────────────────────────────────────
+# ── 10. Smoke test ──────────────────────────────────────────────────────────
 echo ""
 if curl -sf http://localhost:2742 > /dev/null 2>&1; then
     echo "✓ Dashboard is live at http://localhost:2742"
@@ -300,26 +189,18 @@ else
     echo "→ Dashboard starting up — open http://localhost:2742 in a moment"
 fi
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# ── Done ────────────────────────────────────────────────────────────────────
 echo ""
-echo "  ┌─ Nora is ready ──────────────────────────────────────────────────┐"
-echo "  │                                                                   │"
-echo "  │  Your second session starts smarter than your first.             │"
-echo "  │                                                                   │"
-echo "  │  Nora injects relevant context from past sessions into your      │"
-echo "  │  prompt, captures every session for analysis, and generates      │"
-echo "  │  Kiro steering files from your coding patterns.                  │"
+echo "  ┌─ Nora engine is running ─────────────────────────────────────────┐"
 echo "  │                                                                   │"
 echo "  │  Dashboard  →  http://localhost:2742                             │"
+echo "  │  MCP server →  registered in ~/.claude/.mcp.json                 │"
 echo "  │  Config     →  ~/.kernora/config.toml                            │"
 echo "  │                                                                   │"
-if [ "$KIRO_DETECTED" = true ]; then
-echo "  │  Kiro: 5 hooks active  ·  Claude Code: 6 hooks + MCP active    │"
-else
-echo "  │  Claude Code: 6 hooks + MCP server active                       │"
-fi
+echo "  │  Next: install a claw to connect your AI coding agent:           │"
 echo "  │                                                                   │"
-echo "  │  Verify:  curl -s localhost:2742 | head -5                       │"
+echo "  │    Claude Code:  claude plugin add kernora-ai/claude-claw        │"
+echo "  │    Kiro:         ext install kernora-ai.kiro-claw                │"
 echo "  │                                                                   │"
 echo "  └──────────────────────────────────────────────────────────────────┘"
 echo ""
