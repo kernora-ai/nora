@@ -390,6 +390,8 @@ def main():
         sys.exit(0)
 
     prompt = data.get("prompt", "")
+    if isinstance(prompt, dict):
+        prompt = prompt.get("content", "")
     if not prompt or len(prompt) < 5:
         sys.exit(0)
 

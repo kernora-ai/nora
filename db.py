@@ -46,10 +46,81 @@ def init_db():
             summary          TEXT,
             token_cost       INTEGER DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS patterns (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  TEXT REFERENCES sessions(id),
+            pattern     TEXT,
+            code_example TEXT DEFAULT '',
+            domains     TEXT DEFAULT '',
+            context     TEXT DEFAULT '',
+            effectiveness REAL DEFAULT 0.7,
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS decisions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  TEXT REFERENCES sessions(id),
+            decision    TEXT,
+            context     TEXT DEFAULT '',
+            rationale   TEXT DEFAULT '',
+            alternatives TEXT DEFAULT '',
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS reported_bugs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id      TEXT REFERENCES sessions(id),
+            title           TEXT,
+            file_path       TEXT DEFAULT '',
+            error_signature TEXT DEFAULT '',
+            fix_code        TEXT DEFAULT '',
+            severity        TEXT DEFAULT 'medium',
+            status          TEXT DEFAULT 'open',
+            created_at      TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE INDEX IF NOT EXISTS idx_sessions_analyzed
             ON sessions(analyzed, inserted_at);
         CREATE INDEX IF NOT EXISTS idx_insights_session
             ON insights(session_id);
+        CREATE INDEX IF NOT EXISTS idx_patterns_session
+            ON patterns(session_id);
+        CREATE INDEX IF NOT EXISTS idx_decisions_session
+            ON decisions(session_id);
+        CREATE INDEX IF NOT EXISTS idx_bugs_session
+            ON reported_bugs(session_id);
+    """)
+
+    # -- FTS5 indexes for context search --
+    conn.executescript("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_patterns USING fts5(
+            pattern, code_example, domains, context,
+            content='patterns', content_rowid='id'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_decisions USING fts5(
+            decision, context, rationale, alternatives,
+            content='decisions', content_rowid='id'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_bugs USING fts5(
+            title, file_path, error_signature, fix_code,
+            content='reported_bugs', content_rowid='id'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_insights USING fts5(
+            summary, themes, playbook, anti_patterns, claude_md_rules,
+            knowledge_domains, reusable_patterns,
+            content='insights', content_rowid='id'
+        );
+        CREATE TABLE IF NOT EXISTS nora_metrics (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type  TEXT NOT NULL,
+            prompt_hash TEXT,
+            result_type TEXT,
+            result_id   INTEGER,
+            rank        REAL,
+            keywords    TEXT,
+            latency_ms  REAL,
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_nora_metrics_type
+            ON nora_metrics(event_type, created_at);
     """)
 
     # ── v2 schema: deep extraction columns (additive — never drops existing) ─────
