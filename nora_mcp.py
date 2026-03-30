@@ -9,7 +9,7 @@ Run standalone:  python3 nora_mcp.py
 Run via Claude:  Configured in ~/.claude/settings.json mcpServers
 Run via Desktop: Configured in claude_desktop_config.json
 
-Tools:
+Tools (11):
   nora_search              — full-text search across patterns, decisions, bugs, insights
   nora_patterns            — list effective patterns, optionally filtered by project
   nora_decisions           — list architectural decisions
@@ -19,14 +19,18 @@ Tools:
   nora_scope_validation    — validate planned execution scope before multi-file edits
   nora_skills              — fetch distilled methodology from past sessions
   nora_dashboard           — full intelligence dashboard inline (KPIs, patterns, decisions, bugs)
+  nora_analyze_pending     — get next unanalyzed session with Phase 1 data + analysis prompt
+  nora_store_analysis      — store agent-generated analysis (Phase 2 via Kiro's built-in model)
 
-SECURITY: Read-only access to local echo.db. No writes (except nora_metrics for scope validation).
-          No network calls beyond MCP stdio.
+SECURITY: Read-only access to local echo.db except for analysis storage (nora_store_analysis).
+          No network calls beyond MCP stdio. No API keys required — uses Kiro's built-in model.
 """
 
 import json
 import sqlite3
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -38,6 +42,8 @@ from mcp.types import Tool, TextContent
 
 # Configuration
 DB_PATH = Path.home() / ".kernora" / "echo.db"
+SPOOL_DIR = Path.home() / ".kernora" / "spool"
+STEERING_DIR = Path.home() / ".kiro" / "steering"
 DB_TIMEOUT = 2  # seconds
 
 
@@ -176,6 +182,39 @@ class NoraServer:
                     ),
                     inputSchema={"type": "object", "properties": {}},
                 ),
+                Tool(
+                    name="nora_analyze_pending",
+                    description=(
+                        "Check for unanalyzed sessions and return one for analysis. "
+                        "Returns Phase 1 metadata + condensed transcript + analysis prompt. "
+                        "After reading the output, generate the analysis and call "
+                        "nora_store_analysis with your findings. "
+                        "Call this when steering says 'pending sessions' or on 'nora analyze'."
+                    ),
+                    inputSchema={"type": "object", "properties": {}},
+                ),
+                Tool(
+                    name="nora_store_analysis",
+                    description=(
+                        "Store your analysis of a coding session. Call this AFTER reading "
+                        "the output of nora_analyze_pending and generating your analysis. "
+                        "Pass the session_id and your analysis as a JSON object."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "The session ID from nora_analyze_pending.",
+                            },
+                            "analysis": {
+                                "type": "object",
+                                "description": "Your analysis JSON with: session_type, workflow_stage, summary, themes, bugs, optimizations, playbook, architectural_decisions, effective_prompts, anti_patterns, claude_md_rules, knowledge_domains, reusable_patterns, prompt_quality, prompt_avg_words, repetition_count.",
+                            },
+                        },
+                        "required": ["session_id", "analysis"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -209,6 +248,13 @@ class NoraServer:
                     result = self._skills()
                 elif name == "nora_dashboard":
                     result = self._dashboard()
+                elif name == "nora_analyze_pending":
+                    result = self._analyze_pending()
+                elif name == "nora_store_analysis":
+                    result = self._store_analysis(
+                        arguments["session_id"],
+                        arguments["analysis"],
+                    )
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -627,6 +673,275 @@ class NoraServer:
             return list(seen.values())[:limit]
         except Exception:
             return []
+
+    # ── Agent-as-Analyzer: Phase 2 via Kiro's built-in model ──────────────
+
+    def _analyze_pending(self) -> str:
+        """
+        Find an unanalyzed session and return Phase 1 metadata + condensed
+        transcript + analysis prompt. The agent (using Kiro's built-in model)
+        does the LLM reasoning and then calls nora_store_analysis.
+
+        Sources (checked in order):
+          1. Spool directory (~/.kernora/spool/) — sessions captured but not yet
+             ingested by the daemon (e.g., daemon was offline)
+          2. Database — sessions ingested but not yet analyzed (analyzed=0)
+        """
+        # ── Import analyzer functions (Phase 1 is pure Python, zero deps) ──
+        try:
+            analyzer_path = Path.home() / ".kernora" / "app" / "analyzer.py"
+            if not analyzer_path.exists():
+                # Fallback: maybe running from repo checkout
+                analyzer_path = Path(__file__).parent / "analyzer.py"
+            if not analyzer_path.exists():
+                return (
+                    "Analyzer module not found. Run install.sh to set up Nora, "
+                    "or ensure ~/.kernora/app/analyzer.py exists."
+                )
+
+            # Dynamic import from the known path
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("analyzer", str(analyzer_path))
+            if spec is None or spec.loader is None:
+                return "Failed to load analyzer module."
+            analyzer = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(analyzer)  # type: ignore[union-attr]
+
+            phase1_extract = analyzer.phase1_extract
+            condense_transcript = analyzer.condense_transcript
+            format_metadata = analyzer._format_metadata_for_prompt
+            PROMPT = analyzer.PROMPT
+        except Exception as e:
+            return f"Failed to load analyzer: {e}"
+
+        # ── Source 1: Check spool directory for pending session files ──
+        session_id = ""
+        turns = []  # type: List[Dict[str, Any]]
+        project = ""
+        spool_file = None  # type: Optional[Path]
+
+        if SPOOL_DIR.exists():
+            spool_files = sorted(SPOOL_DIR.glob("kiro_*.json"), key=lambda f: f.name)
+            for sf in spool_files:
+                try:
+                    payload = json.loads(sf.read_text())
+                    sid = payload.get("session_id", "")
+                    t = payload.get("turns", [])
+                    if sid and len(t) >= 3:  # need at least a few turns
+                        session_id = sid
+                        turns = t
+                        project = payload.get("project", "")
+                        spool_file = sf
+                        break
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+        # ── Source 2: Check DB for unanalyzed sessions ──
+        if not turns:
+            try:
+                conn = self._connect_db()
+                row = conn.execute(
+                    "SELECT id, project, turns_json FROM sessions "
+                    "WHERE analyzed = 0 ORDER BY inserted_at LIMIT 1"
+                ).fetchone()
+                conn.close()
+
+                if row:
+                    session_id = row[0]
+                    project = row[1] or ""
+                    try:
+                        turns = json.loads(row[2]) if row[2] else []
+                    except json.JSONDecodeError:
+                        turns = []
+            except Exception:
+                pass
+
+        if not turns or not session_id:
+            return (
+                "No pending sessions to analyze. "
+                "Complete a coding session in Kiro first — the stop hook "
+                "captures the transcript automatically."
+            )
+
+        # ── Run Phase 1 (deterministic, zero cost) ──
+        phase1 = phase1_extract(turns)
+        metadata = format_metadata(phase1)
+        transcript = condense_transcript(phase1, max_tokens=8000)
+
+        # ── Build the prompt for the agent ──
+        analysis_prompt = PROMPT.format(
+            metadata=metadata,
+            transcript=transcript,
+        )
+
+        # ── Return structured output ──
+        output = (
+            f"SESSION READY FOR ANALYSIS\n"
+            f"==========================\n"
+            f"Session ID: {session_id}\n"
+            f"Project: {project}\n"
+            f"Turns: {len(turns)}\n"
+            f"Files touched: {len(phase1.get('files_touched', []))}\n"
+            f"Tools used: {len(phase1.get('tools_used', {}))}\n"
+            f"User prompts: {phase1.get('user_turn_count', 0)}\n"
+            f"Errors detected: {len(phase1.get('error_sequences', []))}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"Read the analysis prompt below. Generate the JSON analysis.\n"
+            f"Then call nora_store_analysis with session_id=\"{session_id}\" "
+            f"and your analysis JSON.\n\n"
+            f"{'=' * 60}\n"
+            f"{analysis_prompt}\n"
+        )
+
+        return output
+
+    def _store_analysis(self, session_id: str, analysis: Any) -> str:
+        """
+        Store the agent's analysis of a session. Called AFTER the agent reads
+        the output of nora_analyze_pending and generates the analysis JSON.
+
+        Steps:
+          1. Validate the analysis has required fields
+          2. If session was from spool, ingest it into DB first
+          3. Call db.mark_analyzed() to store insights
+          4. Remove the spool file if applicable
+          5. Trigger steering file regeneration
+        """
+        if not session_id:
+            return "Error: session_id is required."
+
+        # Handle case where analysis is passed as string (some agents serialize)
+        if isinstance(analysis, str):
+            try:
+                analysis = json.loads(analysis)
+            except json.JSONDecodeError:
+                return "Error: analysis must be valid JSON."
+
+        if not isinstance(analysis, dict):
+            return "Error: analysis must be a JSON object."
+
+        # ── Validate minimum required fields ──
+        required = ["session_type", "summary"]
+        missing = [f for f in required if not analysis.get(f)]
+        if missing:
+            return f"Error: analysis is missing required fields: {', '.join(missing)}"
+
+        # ── If session came from spool, ingest into DB first ──
+        spool_file = None  # type: Optional[Path]
+        if SPOOL_DIR.exists():
+            for sf in SPOOL_DIR.glob("kiro_*.json"):
+                try:
+                    payload = json.loads(sf.read_text())
+                    if payload.get("session_id") == session_id:
+                        spool_file = sf
+                        # Ingest into DB
+                        try:
+                            db_path = Path.home() / ".kernora" / "app" / "db.py"
+                            if not db_path.exists():
+                                db_path = Path(__file__).parent / "db.py"
+
+                            import importlib.util
+                            spec = importlib.util.spec_from_file_location("db", str(db_path))
+                            if spec and spec.loader:
+                                db_mod = importlib.util.module_from_spec(spec)
+                                spec.loader.exec_module(db_mod)  # type: ignore[union-attr]
+                                db_mod.store_session(payload)
+                        except Exception as e:
+                            return f"Error ingesting spool session: {e}"
+                        break
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+        # ── Merge Phase 1 data into analysis (tools, files, commands) ──
+        # The agent provides semantic fields; we add deterministic fields
+        try:
+            conn = self._connect_db()
+            row = conn.execute(
+                "SELECT turns_json FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            conn.close()
+
+            if row and row[0]:
+                try:
+                    turns = json.loads(row[0])
+                    # Import phase1_extract
+                    analyzer_path = Path.home() / ".kernora" / "app" / "analyzer.py"
+                    if not analyzer_path.exists():
+                        analyzer_path = Path(__file__).parent / "analyzer.py"
+
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("analyzer", str(analyzer_path))
+                    if spec and spec.loader:
+                        analyzer = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(analyzer)  # type: ignore[union-attr]
+                        phase1 = analyzer.phase1_extract(turns)
+                        # Inject Phase 1 deterministic data
+                        analysis.setdefault("tools_used", phase1.get("tools_used", {}))
+                        analysis.setdefault("files_touched", phase1.get("files_touched", []))
+                        analysis.setdefault("commands_run", phase1.get("commands_run", []))
+                except (json.JSONDecodeError, Exception):
+                    pass
+        except Exception:
+            pass
+
+        # ── Store in DB via mark_analyzed ──
+        try:
+            db_path = Path.home() / ".kernora" / "app" / "db.py"
+            if not db_path.exists():
+                db_path = Path(__file__).parent / "db.py"
+
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("db", str(db_path))
+            if spec is None or spec.loader is None:
+                return "Error: db module not found."
+            db_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(db_mod)  # type: ignore[union-attr]
+            db_mod.mark_analyzed(session_id, analysis)
+        except Exception as e:
+            return f"Error storing analysis: {e}"
+
+        # ── Remove spool file ──
+        if spool_file and spool_file.exists():
+            try:
+                spool_file.unlink()
+            except OSError:
+                pass
+
+        # ── Trigger steering regeneration ──
+        self._trigger_steering_regen()
+
+        # ── Summary ──
+        stype = analysis.get("session_type", "unknown")
+        summary = analysis.get("summary", "")[:150]
+        themes = analysis.get("themes", [])
+        bugs = analysis.get("bugs", [])
+        decisions = analysis.get("architectural_decisions", [])
+
+        return (
+            f"Analysis stored for session {session_id[:12]}.\n\n"
+            f"Type: {stype}\n"
+            f"Summary: {summary}\n"
+            f"Themes: {len(themes)} | Bugs: {len(bugs)} | Decisions: {len(decisions)}\n\n"
+            f"Steering files will regenerate with the new intelligence.\n"
+            f"Run nora_analyze_pending again to process more sessions."
+        )
+
+    def _trigger_steering_regen(self):
+        """Trigger steering file regeneration in the background."""
+        venv_python = Path.home() / ".kernora" / "venv" / "bin" / "python3"
+        # Check both possible locations
+        writer_path = Path.home() / ".kiro" / "hooks" / "steering_writer.py"
+        if not writer_path.exists():
+            writer_path = Path.home() / ".kernora" / "app" / "steering_writer.py"
+        if venv_python.exists() and writer_path.exists():
+            try:
+                subprocess.Popen(
+                    [str(venv_python), str(writer_path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception:
+                pass
 
     # ── Dashboard (rich in-IDE view) ──────────────────────────────────────
 

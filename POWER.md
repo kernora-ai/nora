@@ -157,9 +157,9 @@ If all three pass, Nora is ready. Tell the user: "Nora is installed. Your sessio
 
 **Connection:** Local stdio process at `~/.kernora/app/nora_mcp.py`
 
-Nora's MCP server provides read-only access to your session intelligence database. All data stays local in `~/.kernora/echo.db`.
+Nora's MCP server provides access to your session intelligence database. All data stays local in `~/.kernora/echo.db`.
 
-**Tools:**
+**Tools (11):**
 
 - **nora_search** — Full-text search across patterns, decisions, bugs, and insights from past sessions. Required: `query` (string).
 - **nora_patterns** — List effective coding patterns, optionally filtered by project. Optional: `project` (string), `min_effectiveness` (number, 0-1).
@@ -170,6 +170,8 @@ Nora's MCP server provides read-only access to your session intelligence databas
 - **nora_scope_validation** — Validate that planned execution scope is focused and safe before multi-file edits. Required: `intent` (string). Optional: `files_to_touch` (string array).
 - **nora_skills** — Fetch distilled methodology from your team's highest-quality sessions.
 - **nora_dashboard** — Full intelligence dashboard inline: KPIs, top patterns, recent decisions, open bugs, recent sessions, knowledge domains. Say "show dashboard" or "Nora status".
+- **nora_analyze_pending** — Get next unanalyzed session with Phase 1 metadata + condensed transcript + analysis prompt. No arguments needed.
+- **nora_store_analysis** — Store your analysis of a session (called after nora_analyze_pending). Required: `session_id` (string), `analysis` (object).
 
 ## When to Load Steering Files
 
@@ -182,21 +184,24 @@ Nora generates three global steering files that Kiro reads automatically. They d
 ## How Nora Works
 
 1. **You code normally.** Nora is silent during your session.
-2. **Session ends.** The stop hook captures the transcript and sends it to the local daemon.
-3. **Daemon analyzes.** Two-phase extraction: deterministic parsing + LLM analysis (using your own API key).
-4. **Knowledge accumulates.** Patterns, decisions, and bugs are stored in `~/.kernora/echo.db`.
-5. **Steering evolves.** After each analysis, steering files regenerate with the latest intelligence.
-6. **Next session is smarter.** Kiro reads the steering files. The MCP tools answer questions about past work.
+2. **Session ends.** The stop hook captures the transcript and spools it locally.
+3. **Next session starts.** The agentSpawn hook detects pending sessions and nudges the agent.
+4. **Agent analyzes (zero API key).** Kiro's built-in model reads Phase 1 metadata + condensed transcript via `nora_analyze_pending`, generates semantic analysis, and stores it via `nora_store_analysis`. No external API key needed.
+5. **Knowledge accumulates.** Patterns, decisions, and bugs are stored in `~/.kernora/echo.db`.
+6. **Steering evolves.** After each analysis, steering files regenerate with the latest intelligence.
+7. **Every session is smarter.** Kiro reads the steering files. The MCP tools answer questions about past work.
+
+**Optional:** If you have an API key (Anthropic, Gemini, etc.), the daemon can also analyze sessions in the background for deeper extraction. But the agent-as-analyzer path works with zero keys.
 
 ## Privacy
 
 Nora runs 100% locally:
 
 - Session transcripts stored in `~/.kernora/echo.db` on your machine
-- Analysis uses YOUR API key (Anthropic, Gemini, Bedrock, or local Ollama)
+- Agent-as-analyzer uses Kiro's built-in model — no external API calls
+- Optional deep analysis uses YOUR API key if configured
 - Steering files live in `~/.kiro/steering/` on your machine
 - Zero telemetry, zero cloud storage, zero data sharing
-- The MCP server is read-only — it cannot modify your code or database
 
 ## Dashboard
 
