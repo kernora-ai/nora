@@ -95,7 +95,7 @@ def analysis_loop():
                     log(f"analyzed {session['id'][:8]}: {bugs} bugs, "
                         f"{cost} tokens [{model}]")
                     notify(
-                        "Nora · Kernora",
+                        "Nora",
                         result.get("summary") or "Session analyzed. Dashboard updated."
                     )
                 except Exception as e:
@@ -122,26 +122,26 @@ def run_analysis_now():
     from notifier import notify
 
     sessions = get_unanalyzed(limit=5)
-    print(f"[kernora] found {len(sessions)} unanalyzed sessions")
+    print(f"[nora] found {len(sessions)} unanalyzed sessions")
 
     for session in sessions:
-        print(f"[kernora] analyzing {session['id'][:8]}...")
+        print(f"[nora] analyzing {session['id'][:8]}...")
         try:
             result = analyze(session)
             mark_analyzed(session["id"], result)
-            print(f"[kernora] model used:  {result.get('model_used')}")
-            print(f"[kernora] token cost:  {result.get('token_cost')}")
-            print(f"[kernora] bugs found:  {len(result.get('bugs', []))}")
-            print(f"[kernora] summary:     {result.get('summary')}")
-            notify("Nora · Kernora", result.get("summary", ""))
+            print(f"[nora] model used:  {result.get('model_used')}")
+            print(f"[nora] token cost:  {result.get('token_cost')}")
+            print(f"[nora] bugs found:  {len(result.get('bugs', []))}")
+            print(f"[nora] summary:     {result.get('summary')}")
+            notify("Nora", result.get("summary", ""))
         except Exception as e:
-            print(f"[kernora] error: {e}")
+            print(f"[nora] error: {e}")
 
 
 def main():
     HOME.mkdir(parents=True, exist_ok=True)
 
-    log("Kernora daemon starting (BYOK mode)")
+    log("Nora daemon starting (BYOK mode)")
     log("Zero bytes will leave this machine.")
     init_db()
     replay_spool()

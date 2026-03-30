@@ -10,24 +10,34 @@ Zero bytes leave your device. You own everything.
 
 ---
 
-## What you get
+## Your second session starts smarter than your first
 
-**After every coding session**, Nora surfaces:
+After each coding session, Nora injects relevant context from your past sessions directly into your next prompt. That JWT race condition you fixed three times? Nora reminds you of the fix before you hit it again. The performance optimization pattern that worked last month? Nora surfaces it when you're writing similar code.
 
-- **Recurring bugs** — the JWT race condition you've hit 7 times this month
-- **Prompt patterns** — what's working, what's causing rework, how your quality is trending
-- **CLAUDE.md rules** — specific project rules that would eliminate hours of repeated mistakes
-- **Playbooks** — repeatable workflows extracted from your best sessions
-- **Architectural decisions** — the tradeoffs you made, documented automatically
+You choose which patterns to inject — or let Nora auto-detect the highest-value context. Either way, your next session has institutional memory.
 
-All of this appears in a local dashboard at `localhost:2742` — no cloud, no account, no subscription required.
+---
+
+## What it looks like
+
+```
+◎ Nora found relevant context from your past sessions:
+
+  1. [auth middleware] JWT race condition — fixed with mutex lock
+     in 2 sessions, last seen 3h ago
+
+  2. [prisma] N+1 query in /api/users — use include: { posts: true }
+     effectiveness: high, 4 sessions
+
+→ Type a number to inject, or continue with your prompt.
+```
 
 ---
 
 ## Install
 
 ```bash
-curl -sf https://kernora.ai/install | bash
+curl -fsSL https://kernora.ai/install | bash
 ```
 
 Then install a **claw** — the lightweight adapter for your coding agent:
@@ -41,6 +51,46 @@ Then install a **claw** — the lightweight adapter for your coding agent:
 | **Build your own** | [Claw Protocol →](docs/CLAW-PROTOCOL.md) | Any agent with transcripts |
 
 **That's it.** End a coding session. Within 60 seconds, Nora analyzes it and notifies you.
+
+---
+
+## What you get
+
+**After every coding session**, Nora surfaces:
+
+- **Context injection** — your own solutions from past sessions appear in your next prompt, automatically ranked by relevance and effectiveness
+- **Recurring bugs** — the JWT race condition you've hit 7 times this month, with the fix that worked
+- **Prompt patterns** — what's working, what's causing rework, how your quality is trending
+- **CLAUDE.md rules** — specific project rules that would eliminate hours of repeated mistakes
+- **Playbooks** — repeatable workflows extracted from your best sessions
+- **Architectural decisions** — the tradeoffs you made, documented automatically
+
+All of this appears in a local dashboard at `localhost:2742` — no cloud, no account, no subscription required.
+
+---
+
+## Hooks
+
+Nora integrates at the lifecycle level — not just session capture, but real-time context injection and tool validation. See [docs/HOOKS.md](docs/HOOKS.md) for the full reference.
+
+### Kiro — 5 hooks
+
+| Hook | What Nora does | Blocks? |
+|------|---------------|---------|
+| `agentSpawn` | Checks daemon health, refreshes steering files | No |
+| `userPromptSubmit` | Searches past sessions, injects relevant context | No |
+| `preToolUse` | Validates tool input against known anti-patterns | **Yes** (exit 2) |
+| `postToolUse` | Checks output for known error signatures, logs metrics | No |
+| `stop` | Captures transcript, sends to daemon for analysis | No |
+
+Nora also generates **steering files** at `.kiro/steering/nora-*.md` — patterns, decisions, and anti-patterns from your history. Kiro reads these automatically on every prompt.
+
+### Claude Code — 2 hooks
+
+| Hook | What Nora does |
+|------|---------------|
+| `UserPromptSubmit` | Searches past sessions, injects relevant context |
+| `Stop` | Captures transcript, sends to daemon for analysis |
 
 ---
 
@@ -62,7 +112,7 @@ Desktop notification: "Nora: 2 bugs found, 1 playbook extracted"
 Dashboard at localhost:2742
 ```
 
-**Privacy model:** In BYOK (Bring Your Own Key) mode, transcripts never leave your machine. The LLM call goes directly from your device to your API provider. Kernora servers are not in the path. This is verified by network audit during install.
+**Privacy model:** In BYOK (Bring Your Own Key) mode, transcripts never leave your machine. The LLM call goes directly from your device to your API provider. Nora servers are not in the path. This is verified by network audit during install.
 
 ---
 
@@ -153,6 +203,8 @@ See [docs/CLAW-PROTOCOL.md](docs/CLAW-PROTOCOL.md) for the full spec. It's ~50 l
 - [x] Local dashboard (Flask + HTMX)
 - [x] Claude Code claw
 - [x] Kiro claw (via vscode-claw base)
+- [x] Steering generation (explicit steering prompts for common patterns)
+- [x] Kiro Power (integration with Kiro's native power commands)
 - [ ] Cursor claw
 - [ ] Team intelligence (squad-level patterns for engineering managers)
 - [ ] Trend analysis (week-over-week prompt quality, bug recurrence)

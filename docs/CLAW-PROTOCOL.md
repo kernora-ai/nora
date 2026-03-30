@@ -112,13 +112,37 @@ Claws are named `{agent}-claw`: `claude-claw`, `kiro-claw`, `cursor-claw`, `wind
 
 ## Testing
 
-Nora ships with a test mode:
+Send a test envelope to verify your claw works:
 
-```bash
-nora test-claw --envelope path/to/test-envelope.json
+```python
+import json
+import socket
+from pathlib import Path
+
+test_envelope = {
+    "version": 1,
+    "agent": "my-agent",
+    "session_id": "test-001",
+    "project": "/tmp/test-project",
+    "turns": [
+        {"role": "user", "content": "Test prompt"},
+        {"role": "assistant", "content": "Test response"}
+    ]
+}
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect(str(Path.home() / ".kernora" / "nora.sock"))
+sock.sendall(json.dumps(test_envelope).encode() + b"\n")
+response = json.loads(sock.recv(1024))
+print(response)  # {"ok": true, "queued": true}
+sock.close()
 ```
 
-This validates the envelope format, runs both analysis phases, and prints the results without persisting to the database.
+Then check the dashboard at `localhost:2742` — your test session should appear within 60 seconds.
+
+## Hooks
+
+Claws capture transcripts. Hooks extend agent behavior in real-time. If your agent supports lifecycle hooks (like Kiro's 5 hooks or Claude Code's 2 hooks), see [docs/HOOKS.md](HOOKS.md) for the full reference.
 
 ---
 

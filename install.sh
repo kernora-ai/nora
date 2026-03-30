@@ -14,8 +14,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 
 echo ""
-echo "◎  Kernora — installing your silent coding partner"
-echo "   Mode: BYOK — zero bytes will leave this machine."
+echo "◎  Nora — your AI sessions, remembered"
+echo "   Mode: BYOK — zero bytes leave your device."
 echo ""
 
 # ── 1. Python check ──────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ elif [ ! -f "$SETTINGS" ]; then
   }
 }
 SETTINGS_EOF
-    echo "✓ Created ~/.claude/settings.json with Kernora hooks"
+    echo "✓ Created ~/.claude/settings.json with Nora hooks"
 else
     echo "⚠  jq not found. Add these hooks to ~/.claude/settings.json manually:"
     echo "   Stop: $STOP_HOOK"
@@ -164,7 +164,7 @@ KIRO_EOF
         "$PYTHON" "$REPO_DIR/steering_writer.py" 2>/dev/null && echo "✓ Kiro steering files generated" || true
     fi
 else
-    echo "→ Kiro not detected — skipping Kiro hooks (install Kiro, then re-run)"
+    echo "→ Kiro not detected — skipping Kiro hooks"
 fi
 
 # ── 8. Initialize database ────────────────────────────────────────────────────
@@ -267,29 +267,24 @@ fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo "  ┌─ Kernora is installed ────────────────────────────────────────────┐"
+echo "  ┌─ Nora is ready ──────────────────────────────────────────────────┐"
 echo "  │                                                                   │"
-echo "  │  Dashboard    →  http://localhost:2742                           │"
-echo "  │  Config       →  ~/.kernora/config.toml                         │"
-echo "  │  Logs         →  ~/.kernora/logs/                                │"
+echo "  │  Your second session starts smarter than your first.             │"
 echo "  │                                                                   │"
-echo "  │  What Nora does:                                                 │"
-echo "  │    • Captures every Claude Code + Kiro session automatically     │"
-echo "  │    • Analyzes patterns, decisions, and tech debt                 │"
-echo "  │    • Injects relevant context into your next session             │"
-echo "  │    • Validates tool use against learned anti-patterns            │"
-echo "  │    • Generates Kiro steering files from your history             │"
-echo "  │    • Tracks it all in your local dashboard                       │"
+echo "  │  Nora injects relevant context from past sessions into your      │"
+echo "  │  prompt, captures every session for analysis, and generates      │"
+echo "  │  Kiro steering files from your coding patterns.                  │"
+echo "  │                                                                   │"
+echo "  │  Dashboard  →  http://localhost:2742                             │"
+echo "  │  Config     →  ~/.kernora/config.toml                            │"
 echo "  │                                                                   │"
 if [ "$KIRO_DETECTED" = true ]; then
-echo "  │  Kiro: All 5 hooks active (spawn/prompt/pretool/posttool/stop)  │"
-echo "  │  Claude Code: 2 hooks active (prompt/stop)                      │"
+echo "  │  Kiro: 5 hooks active  ·  Claude Code: 2 hooks active           │"
 else
-echo "  │  Claude Code: 2 hooks active (prompt/stop)                      │"
-echo "  │  Kiro: Install Kiro, then re-run to activate 5 hooks            │"
+echo "  │  Claude Code: 2 hooks active                                     │"
 fi
 echo "  │                                                                   │"
-echo "  │  Start a session — Nora is already watching.                    │"
+echo "  │  Verify:  curl -s localhost:2742 | head -5                       │"
 echo "  │                                                                   │"
-echo "  └───────────────────────────────────────────────────────────────────┘"
+echo "  └──────────────────────────────────────────────────────────────────┘"
 echo ""
