@@ -1,72 +1,224 @@
 ---
-name: Nora by Kernora
-description: AI Work Intelligence — captures sessions, learns patterns, injects context, evolves steering
-version: 0.2.0
-author: Kernora AI
-repository: https://github.com/kernora-ai/nora
-license: Elastic-2.0
-tags: [productivity, patterns, context, intelligence, session-analysis]
+name: "nora"
+displayName: "Nora — AI Work Intelligence"
+description: "Your AI gets smarter every session. Nora captures sessions, learns patterns, injects context, and evolves steering — all locally."
+keywords: ["nora", "kernora", "patterns", "context", "memory", "intelligence", "learning", "steering", "session", "decisions", "bugs", "anti-patterns", "knowledge", "recall", "history"]
+author: "Kernora AI"
 ---
 
-# Nora — AI Work Intelligence for Kiro
+# Nora — AI Work Intelligence
 
-Nora is your silent coding partner. She captures every Kiro session, extracts patterns, decisions, and anti-patterns, then feeds them back into your next session as context and steering.
+Nora is your silent coding partner. She captures every session, extracts patterns, decisions, and anti-patterns, then feeds them back as context and steering. Your AI gets smarter every session.
 
-## What Nora Does
-
-- **Captures** every Kiro session transcript automatically (stop hook)
-- **Analyzes** sessions with two-phase extraction: deterministic + LLM
-- **Injects context** from past sessions when you type a prompt (userPromptSubmit hook)
-- **Validates** tool use against danger patterns and learned anti-patterns (preToolUse hook)
-- **Monitors** tool outputs for known error signatures (postToolUse hook)
-- **Generates steering** files that Kiro reads on every prompt (`.kiro/steering/nora-*.md`)
-- **Tracks** everything in a local dashboard at http://localhost:2742
+100% local. Zero bytes leave your machine. BYOK (Bring Your Own Key).
 
 ## Onboarding
 
-### Prerequisites
+### Step 1: Check Prerequisites
 
-- Python 3.9+
-- One of: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, AWS Bedrock profile, or Ollama
+Verify the following are installed:
 
-### Install
+- **Python 3.9+** — Run `python3 --version` to confirm
+- **git** — Run `git --version` to confirm
+
+If either is missing, halt setup and inform the user.
+
+### Step 2: Install Nora Engine
+
+Check if Nora is already installed by looking for `~/.kernora/app/daemon.py`.
+
+If Nora is NOT installed, run:
 
 ```bash
-curl -fsSL https://kernora.ai/install | bash
+git clone https://github.com/kernora-ai/nora.git /tmp/nora-install && bash /tmp/nora-install/install.sh && rm -rf /tmp/nora-install
 ```
 
-This installs hooks for both Kiro and Claude Code. Your data never leaves your machine.
+This installs the engine to `~/.kernora/`, creates a virtual environment, initializes the database, starts the daemon and dashboard, and configures auto-start on login.
 
-### Verify
+If Nora IS already installed, skip to Step 3.
 
-After installing, start a Kiro session and check:
+### Step 3: Configure API Key
 
-1. Dashboard is live: http://localhost:2742
-2. Steering files exist: `ls ~/.kiro/steering/nora-*.md`
-3. After your first session completes, check for analysis: open the dashboard
+Nora needs one LLM API key for session analysis (BYOK — your key, your machine). Check if any of these environment variables are set:
 
-## Steering
+- `ANTHROPIC_API_KEY` (recommended)
+- `GEMINI_API_KEY`
+- `AWS_PROFILE` (for Bedrock)
 
-Nora generates three global steering files:
+If none are set, ask the user to provide one. They can also use local Ollama — edit `~/.kernora/config.toml` and set `provider = "ollama"`.
 
-| File | Content | Updated |
-|------|---------|---------|
-| `~/.kiro/steering/nora-patterns.md` | Reusable patterns, playbooks, tech domains | After each analysis |
-| `~/.kiro/steering/nora-decisions.md` | Architectural decisions, project rules | After each analysis |
-| `~/.kiro/steering/nora-antipatterns.md` | Mistakes to avoid, common bugs | After each analysis |
+### Step 4: Install Kiro Hooks
 
-These are read by Kiro automatically on every prompt — no hook needed.
+Create the following hooks in `.kiro/hooks/` for this workspace:
 
-## Hooks
+**Hook: nora-session-capture** (triggers on Agent Stop)
+```json
+{
+  "enabled": true,
+  "name": "Nora Session Capture",
+  "description": "Captures session transcript and sends to Nora for analysis",
+  "version": "1",
+  "when": { "type": "agentStop" },
+  "then": {
+    "type": "runCommand",
+    "command": "python3 ~/.kernora/app/kiro_stop.py"
+  }
+}
+```
 
-| Hook | Script | Purpose |
-|------|--------|---------|
-| `agentSpawn` | `nora_spawn.py` | Ensure daemon running, check steering freshness |
-| `userPromptSubmit` | `nora_context.py` | Inject relevant context from past sessions |
-| `preToolUse` | `nora_pretool.py` | Block dangerous tool use, warn on anti-patterns |
-| `postToolUse` | `nora_posttool.py` | Detect known errors, log tool metrics |
-| `stop` | `kernora_hook.py` | Capture session transcript for analysis |
+**Hook: nora-tool-shield** (triggers on Pre Tool Use)
+```json
+{
+  "enabled": true,
+  "name": "Nora Tool Shield",
+  "description": "Validates tool invocations against danger patterns and learned anti-patterns",
+  "version": "1",
+  "when": { "type": "preToolUse" },
+  "then": {
+    "type": "runCommand",
+    "command": "python3 ~/.kernora/app/kiro_spec_shield.py"
+  }
+}
+```
+
+**Hook: nora-tool-monitor** (triggers on Post Tool Use)
+```json
+{
+  "enabled": true,
+  "name": "Nora Tool Monitor",
+  "description": "Checks tool output against known error signatures from past sessions",
+  "version": "1",
+  "when": { "type": "postToolUse" },
+  "then": {
+    "type": "runCommand",
+    "command": "python3 ~/.kernora/app/kiro_post_tool.py"
+  }
+}
+```
+
+### Step 5: Copy Hook Scripts
+
+If the hook Python scripts don't exist at `~/.kernora/app/kiro_*.py`, download them:
+
+```bash
+for f in kiro_stop.py kiro_spec_shield.py kiro_post_tool.py steering_writer.py; do
+  [ ! -f "$HOME/.kernora/app/$f" ] && curl -sfL "https://raw.githubusercontent.com/kernora-ai/kiro-claw/main/hooks/$f" -o "$HOME/.kernora/app/$f"
+done
+```
+
+### Step 6: Generate Initial Steering
+
+Run the steering writer to generate initial steering files:
+
+```bash
+python3 ~/.kernora/app/steering_writer.py
+```
+
+This creates `~/.kiro/steering/nora-patterns.md`, `nora-decisions.md`, and `nora-antipatterns.md`. These are read by Kiro automatically on every prompt.
+
+### Step 7: Verify Installation
+
+Confirm Nora is running:
+
+1. Check daemon: `ls ~/.kernora/daemon.sock` (should exist)
+2. Check dashboard: `curl -sf http://localhost:2742` (should return HTML)
+3. Check steering: `ls ~/.kiro/steering/nora-*.md` (should list 3 files)
+
+If all three pass, Nora is ready. Tell the user: "Nora is installed. Your sessions will be captured and analyzed automatically. Steering files update after each session."
+
+## Available MCP Server
+
+### nora
+
+**Connection:** Local stdio process at `~/.kernora/app/nora_mcp.py`
+
+Nora's MCP server provides read-only access to your session intelligence database. All data stays local in `~/.kernora/echo.db`.
+
+**Tools:**
+
+- **nora_search** — Full-text search across patterns, decisions, bugs, and insights from past sessions. Required: `query` (string).
+- **nora_patterns** — List effective coding patterns, optionally filtered by project. Optional: `project` (string), `min_effectiveness` (number, 0-1).
+- **nora_decisions** — List architectural decisions recorded across sessions. Optional: `project` (string).
+- **nora_bugs** — List known bugs with severity, file path, and fix code. Optional: `status` (open/resolved/all), `severity` (critical/high/medium/low).
+- **nora_stats** — Dashboard stats: session count, insights, patterns, decisions, open bugs, total tokens.
+- **nora_session** — Get full details for a specific session by ID. Required: `session_id` (string).
+- **nora_scope_validation** — Validate that planned execution scope is focused and safe before multi-file edits. Required: `intent` (string). Optional: `files_to_touch` (string array).
+- **nora_skills** — Fetch distilled methodology from your team's highest-quality sessions.
+
+## When to Load Steering Files
+
+Nora generates three global steering files that Kiro reads automatically. They don't need explicit loading — they're always active. However, these are the contexts where each is most valuable:
+
+- Starting a new coding task → `nora-patterns.md` provides reusable patterns and playbooks
+- Making architectural choices → `nora-decisions.md` provides past decisions and rationale
+- About to modify code → `nora-antipatterns.md` warns about known mistakes and bugs
+
+## How Nora Works
+
+1. **You code normally.** Nora is silent during your session.
+2. **Session ends.** The stop hook captures the transcript and sends it to the local daemon.
+3. **Daemon analyzes.** Two-phase extraction: deterministic parsing + LLM analysis (using your own API key).
+4. **Knowledge accumulates.** Patterns, decisions, and bugs are stored in `~/.kernora/echo.db`.
+5. **Steering evolves.** After each analysis, steering files regenerate with the latest intelligence.
+6. **Next session is smarter.** Kiro reads the steering files. The MCP tools answer questions about past work.
 
 ## Privacy
 
-Nora runs 100% locally. Your session transcripts, analysis results, and steering files never leave your machine. The only network call is to your own LLM provider (Anthropic, AWS Bedrock, Google, or local Ollama) for Phase 2 analysis.
+Nora runs 100% locally:
+
+- Session transcripts stored in `~/.kernora/echo.db` on your machine
+- Analysis uses YOUR API key (Anthropic, Gemini, Bedrock, or local Ollama)
+- Steering files live in `~/.kiro/steering/` on your machine
+- Zero telemetry, zero cloud storage, zero data sharing
+- The MCP server is read-only — it cannot modify your code or database
+
+## Dashboard
+
+Open http://localhost:2742 to see:
+
+- Session history with analysis summaries
+- Pattern library with effectiveness scores
+- Architectural decision log
+- Bug tracker with severity and fix code
+- Knowledge Intelligence Quotient (KIQ) — your accumulated engineering judgment
+
+## Configuration
+
+Edit `~/.kernora/config.toml`:
+
+```toml
+[mode]
+type = "byok"              # your key, your machine
+
+[model]
+provider = "anthropic"      # or "bedrock", "gemini", "ollama"
+
+[analysis]
+run_every_minutes = 60      # how often to analyze new sessions
+
+[dashboard]
+port = 2742                 # dashboard port
+```
+
+## Troubleshooting
+
+### Daemon not running
+```bash
+~/.kernora/venv/bin/python3 ~/.kernora/app/daemon.py &
+```
+
+### No steering files generated
+Run manually: `python3 ~/.kernora/app/steering_writer.py`
+If echo.db is empty, complete a few coding sessions first.
+
+### MCP server not connecting
+Verify the server starts: `~/.kernora/venv/bin/python3 ~/.kernora/app/nora_mcp.py`
+Check for missing dependencies: `~/.kernora/venv/bin/pip install mcp`
+
+## Resources
+
+- [GitHub: kernora-ai/nora](https://github.com/kernora-ai/nora) — Engine source
+- [GitHub: kernora-ai/kiro-claw](https://github.com/kernora-ai/kiro-claw) — Kiro hooks source
+- [GitHub: kernora-ai/claude-claw](https://github.com/kernora-ai/claude-claw) — Claude Code hooks
+- [Dashboard](http://localhost:2742) — Local web UI
+- [kernora.ai](https://kernora.ai) — Documentation and guides

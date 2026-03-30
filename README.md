@@ -1,28 +1,64 @@
-# Nora — AI Session Intelligence Engine
+# Nora — AI Work Intelligence
 
-Nora captures your AI coding sessions, analyzes them for patterns and bugs, and makes that knowledge available to future sessions. Every session makes the next one smarter.
-
-No cloud. No proxy. Your data stays on your machine.
+Your AI gets smarter every session. Nora captures coding sessions, extracts patterns and decisions, and feeds them back as context and steering. No cloud. No proxy. Your data stays on your machine.
 
 ## Install
+
+### Kiro (one-click)
+
+Open Kiro → Powers panel (⚡) → **Add power from GitHub** → paste:
+
+```
+https://github.com/kernora-ai/nora
+```
+
+Click Install. Nora's MCP server registers, steering files land, hooks get created. Done.
+
+### Claude Code
+
+```bash
+git clone https://github.com/kernora-ai/nora.git ~/.kernora/src && bash ~/.kernora/src/install.sh
+```
+
+Then install the Claude Code hooks:
+
+```bash
+git clone https://github.com/kernora-ai/claude-claw.git /tmp/claude-claw && bash /tmp/claude-claw/install.sh && rm -rf /tmp/claude-claw
+```
+
+### From source
 
 ```bash
 git clone https://github.com/kernora-ai/nora.git
 cd nora && bash install.sh
 ```
 
-This installs the Nora engine: daemon, analyzer, dashboard, and MCP server. To connect your AI coding agent, install a **claw**:
+Then connect your AI agent with a [claw](#claws).
 
-| Agent | Claw | Install |
-|-------|------|---------|
-| Claude Code | [claude-claw](https://github.com/kernora-ai/claude-claw) | `claude plugin add kernora-ai/claude-claw` |
-| Kiro | [kiro-claw](https://github.com/kernora-ai/kiro-claw) | `ext install kernora-ai.kiro-claw` |
-| Cursor | [cursor-claw](https://github.com/kernora-ai/cursor-claw) | Coming soon |
+## How It Works
+
+```
+You code normally
+    │
+    ▼
+Session ends → claw captures transcript → sends to Nora daemon
+    │
+    ▼
+Nora analyzes → extracts patterns, decisions, bugs (using YOUR API key)
+    │
+    ▼
+Steering files regenerate → Kiro reads them on next prompt
+    │
+    ▼
+Next session is smarter. Repeat.
+```
+
+All data in `~/.kernora/echo.db`. All analysis uses your own API key (BYOK). Zero bytes leave your machine.
 
 ## Architecture
 
 ```
-AI Coding Agent (Claude Code, Kiro, Cursor, ...)
+AI Coding Agent (Kiro, Claude Code, Cursor, ...)
     │
     ├── claw (agent-specific adapter)
     │     └── hooks capture sessions → pipe to Nora daemon
@@ -35,24 +71,19 @@ AI Coding Agent (Claude Code, Kiro, Cursor, ...)
           └── echo.db      — local SQLite database
 ```
 
-All data in `~/.kernora/echo.db`. All analysis uses your own API key (BYOK). Zero bytes leave your machine.
+## Kiro Power
 
-## What's in this repo
+This repo is a **Kiro Power** — installable directly from the Kiro IDE. The Power includes:
 
 | File | Purpose |
 |------|---------|
-| `daemon.py` | Background daemon — receives sessions via Unix socket, stores in echo.db |
-| `analyzer.py` | Session analysis — extracts patterns, decisions, bugs using LiteLLM |
-| `db.py` | Database schema and migrations for echo.db |
-| `dashboard.py` | Web dashboard at localhost:2742 |
-| `nora_mcp.py` | MCP server — 8 tools for searching patterns, bugs, decisions, stats |
-| `notifier.py` | macOS/Linux notifications on analysis complete |
-| `cli_shield.py` | Prompt scope validation |
-| `install.sh` | Engine installer (daemon + dashboard + MCP) |
+| `POWER.md` | Power metadata, onboarding steps, MCP tool documentation |
+| `mcp.json` | MCP server configuration (local stdio) |
+| `steering/` | Template steering files (populated after first session analysis) |
 
-## MCP Server Tools
+After installation, Nora provides 8 MCP tools and 3 auto-updating steering files that Kiro reads on every prompt.
 
-The MCP server exposes session intelligence to any MCP-compatible client (Claude Code, Claude Desktop, etc.):
+## MCP Tools
 
 | Tool | What It Does |
 |------|-------------|
@@ -65,9 +96,41 @@ The MCP server exposes session intelligence to any MCP-compatible client (Claude
 | `nora_scope_validation` | Validate execution scope before multi-file edits |
 | `nora_skills` | Fetch distilled methodology from your best sessions |
 
-## Claw Protocol
+## Steering Files
 
-Claws communicate with Nora via the [Claw Protocol](docs/CLAW-PROTOCOL.md) — a simple JSON envelope over Unix socket. Building a claw for a new agent is straightforward: capture the session transcript, wrap it in the protocol envelope, and send it to `~/.kernora/daemon.sock`.
+Nora generates three global steering files, updated after each session analysis:
+
+| File | Content |
+|------|---------|
+| `nora-patterns.md` | Reusable patterns, playbooks, tech domains |
+| `nora-decisions.md` | Architectural decisions, project rules |
+| `nora-antipatterns.md` | Mistakes to avoid, common bugs |
+
+Kiro reads these automatically on every prompt. No manual loading needed.
+
+## Claws
+
+Claws are agent-specific adapters that capture sessions and pipe them to Nora:
+
+| Agent | Claw | Install |
+|-------|------|---------|
+| **Kiro** | Built into this Power | Automatic via Power install |
+| Claude Code | [claude-claw](https://github.com/kernora-ai/claude-claw) | `bash install.sh` (6 hooks) |
+| Cursor | [cursor-claw](https://github.com/kernora-ai/cursor-claw) | Coming soon |
+| VS Code | [vscode-claw](https://github.com/kernora-ai/vscode-claw) | Shared base for VS Code-derived agents |
+
+## Engine Files
+
+| File | Purpose |
+|------|---------|
+| `daemon.py` | Background daemon — receives sessions via Unix socket, stores in echo.db |
+| `analyzer.py` | Session analysis — extracts patterns, decisions, bugs using LiteLLM |
+| `db.py` | Database schema and migrations for echo.db |
+| `dashboard.py` | Web dashboard at localhost:2742 |
+| `nora_mcp.py` | MCP server — 8 tools for searching patterns, bugs, decisions, stats |
+| `notifier.py` | macOS/Linux notifications on analysis complete |
+| `cli_shield.py` | Prompt scope validation |
+| `install.sh` | Engine installer (daemon + dashboard + MCP) |
 
 ## Configuration
 
@@ -75,18 +138,22 @@ Edit `~/.kernora/config.toml`:
 
 ```toml
 [mode]
-type = "byok"           # your API key, your machine
+type = "byok"              # your key, your machine
 
 [model]
-provider = "anthropic"   # or "bedrock" or "ollama"
+provider = "anthropic"      # or "bedrock", "gemini", "ollama"
 
 [analysis]
-run_every_minutes = 60   # analysis frequency
+run_every_minutes = 60      # analysis frequency
 
 [dashboard]
 port = 2742
 ```
 
+## Privacy
+
+Nora runs 100% locally. Session transcripts, analysis, and steering files never leave your machine. The only network call is to your own LLM provider for analysis. Zero telemetry.
+
 ## License
 
-Elastic License 2.0 — [kernora.ai](https://kernora.ai)
+[Elastic License 2.0](https://www.elastic.co/licensing/elastic-license) — free for personal and team self-hosted use. Commercial redistribution requires agreement with [kernora.ai](https://kernora.ai).
