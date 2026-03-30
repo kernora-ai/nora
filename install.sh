@@ -22,9 +22,16 @@ python3 -c "import sys; assert sys.version_info >= (3,9)" 2>/dev/null || {
 }
 echo "✓ Python $(python3 --version | cut -d' ' -f2)"
 
-# ── 2. Dependencies ───────────────────────────────────────────────────────────
+# ── 2. Virtual environment + dependencies ────────────────────────────────────
+VENV_DIR="$KERNORA_DIR/venv"
+if [ ! -d "$VENV_DIR" ]; then
+    echo "→ Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+fi
+PYTHON="$VENV_DIR/bin/python3"
+PIP="$VENV_DIR/bin/pip"
 echo "→ Installing dependencies..."
-pip install -r "$REPO_DIR/requirements.txt" --quiet
+"$PIP" install -r "$REPO_DIR/requirements.txt" --quiet
 echo "✓ Dependencies installed"
 
 # ── 3. Directories ────────────────────────────────────────────────────────────
@@ -78,8 +85,8 @@ echo "  → kernora_hook.py (session capture on Stop)"
 echo "  → nora_context.py (context injection on UserPromptSubmit)"
 
 # ── 6. Register hooks in Claude Code settings ────────────────────────────────
-STOP_HOOK='{"matcher":"","hooks":[{"type":"command","command":"python3 ~/.claude/hooks/kernora_hook.py","async":true}]}'
-CONTEXT_HOOK='{"matcher":"","hooks":[{"type":"command","command":"python3 ~/.claude/hooks/nora_context.py","timeout":3}]}'
+STOP_HOOK="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/kernora_hook.py\",\"async\":true}]}"
+CONTEXT_HOOK="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_context.py\",\"timeout\":3}]}"
 if [ -f "$SETTINGS" ] && command -v jq &>/dev/null; then
     # Append to existing settings cleanly
     tmp=$(mktemp)
@@ -103,7 +110,7 @@ else
 fi
 
 # ── 7. Initialize database ────────────────────────────────────────────────────
-python3 "$REPO_DIR/db.py"
+"$PYTHON" "$REPO_DIR/db.py"
 
 # ── 8. Stop any existing Kernora processes ────────────────────────────────────
 [ -f "$KERNORA_DIR/daemon.pid" ] && kill "$(cat "$KERNORA_DIR/daemon.pid")" 2>/dev/null && rm "$KERNORA_DIR/daemon.pid" || true
@@ -184,9 +191,9 @@ PLIST
 
 else
     # Linux: start in background now
-    nohup python3 "$REPO_DIR/daemon.py" > "$KERNORA_DIR/logs/daemon.log" 2>&1 &
+    nohup "$PYTHON" "$REPO_DIR/daemon.py" > "$KERNORA_DIR/logs/daemon.log" 2>&1 &
     echo $! > "$KERNORA_DIR/daemon.pid"
-    nohup python3 "$REPO_DIR/dashboard.py" > "$KERNORA_DIR/logs/dashboard.log" 2>&1 &
+    nohup "$PYTHON" "$REPO_DIR/dashboard.py" > "$KERNORA_DIR/logs/dashboard.log" 2>&1 &
     echo "✓ Daemon + dashboard started (Linux)"
 fi
 
