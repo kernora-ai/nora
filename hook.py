@@ -67,7 +67,7 @@ def main():
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        print(f"[kernora] hook: bad JSON: {e}", file=sys.stderr)
+        print(f"[nora] hook: bad JSON: {e}", file=sys.stderr)
         return
 
     session_id      = data.get("session_id", "")

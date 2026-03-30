@@ -561,13 +561,13 @@ def _llm_call(model: str, prompt_text: str) -> tuple:
             err = str(e)
             if "rate_limit" in err.lower() or "RateLimitError" in type(e).__name__:
                 wait = 15 * (2 ** attempt)  # 15s, 30s, 60s
-                print(f"[kernora] rate limit hit, waiting {wait}s (attempt {attempt+1}/3)...")
+                print(f"[nora] rate limit hit, waiting {wait}s (attempt {attempt+1}/3)...")
                 time.sleep(wait)
                 if attempt == 2:
-                    print(f"[kernora] analyzer error: {e}")
+                    print(f"[nora] analyzer error: {e}")
                     return {}, 0
             else:
-                print(f"[kernora] analyzer error: {e}")
+                print(f"[nora] analyzer error: {e}")
                 return {}, 0
 
     if resp is None:
@@ -588,7 +588,7 @@ def _llm_call(model: str, prompt_text: str) -> tuple:
         parsed_text = m.group(0) if m else text
         return json.loads(parsed_text), total_tokens
     except (json.JSONDecodeError, AttributeError) as e:
-        print(f"[kernora] JSON parse error: {e}")
+        print(f"[nora] JSON parse error: {e}")
         return {}, total_tokens
 
 
@@ -611,7 +611,7 @@ def analyze(session: dict) -> dict:
     classify_model, classify_cap, classify_name = models["classify"]
 
     for w in models.get("warnings", []):
-        print(f"[kernora] ⚠ {w}")
+        print(f"[nora] ⚠ {w}")
 
     turns = json.loads(session.get("turns_json", "[]"))
 
@@ -619,9 +619,9 @@ def analyze(session: dict) -> dict:
         return _empty_result(deep_model)
 
     # ── Phase 1: Deterministic extraction ──────────────────────────────────
-    print(f"[kernora] Phase 1: extracting metadata from {len(turns)} events...")
+    print(f"[nora] Phase 1: extracting metadata from {len(turns)} events...")
     phase1 = phase1_extract(turns)
-    print(f"[kernora]   tools: {len(phase1['tools_used'])} unique, "
+    print(f"[nora]   tools: {len(phase1['tools_used'])} unique, "
           f"files: {len(phase1['files_touched'])}, "
           f"commands: {len(phase1['commands_run'])}, "
           f"user turns: {phase1['user_turn_count']}")
@@ -637,16 +637,16 @@ def analyze(session: dict) -> dict:
     # Check if condensed transcript fits in a single call
     estimated_tokens = len(prompt_text) // 4
     if estimated_tokens > 30000:
-        print(f"[kernora]   condensed transcript too large ({estimated_tokens} est. tokens), truncating...")
+        print(f"[nora]   condensed transcript too large ({estimated_tokens} est. tokens), truncating...")
         condensed = condensed[:80000]  # ~20K tokens
         prompt_text = PROMPT.format(metadata=metadata_text, transcript=condensed)
 
-    print(f"[kernora] Phase 2: deep extraction with {deep_name} (capability {deep_cap}/5)...")
+    print(f"[nora] Phase 2: deep extraction with {deep_name} (capability {deep_cap}/5)...")
     llm_result, token_cost = _llm_call(deep_model, prompt_text)
 
     # Fallback: if deep model failed AND we have a different classify model, try that
     if not llm_result and classify_model != deep_model:
-        print(f"[kernora]   deep model failed — falling back to {classify_name} (capability {classify_cap}/5)...")
+        print(f"[nora]   deep model failed — falling back to {classify_name} (capability {classify_cap}/5)...")
         llm_result, fallback_cost = _llm_call(classify_model, prompt_text)
         token_cost += fallback_cost
         if llm_result:
@@ -655,7 +655,7 @@ def analyze(session: dict) -> dict:
 
     model_used = deep_model  # for metadata reporting
     if not llm_result:
-        print("[kernora]   all LLM calls failed — returning Phase 1 results only")
+        print("[nora]   all LLM calls failed — returning Phase 1 results only")
         return _phase1_only_result(phase1, model_used, token_cost)
 
     # ── Merge Phase 1 + Phase 2 ──────────────────────────────────────────

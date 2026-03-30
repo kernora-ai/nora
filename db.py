@@ -141,7 +141,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print(f"[kernora] DB initialized at {DB_PATH}")
+    print(f"[nora] DB initialized at {DB_PATH}")
 
 
 def _add_columns(conn: sqlite3.Connection, table: str, columns: dict):
@@ -150,7 +150,7 @@ def _add_columns(conn: sqlite3.Connection, table: str, columns: dict):
     for col, typedef in columns.items():
         if col not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
-            print(f"[kernora] added column {table}.{col}")
+            print(f"[nora] added column {table}.{col}")
 
 
 def store_session(payload: dict):

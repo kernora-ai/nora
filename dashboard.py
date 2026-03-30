@@ -963,5 +963,5 @@ def health():
 if __name__ == "__main__":
     c = load_cfg()
     port = c.get("dashboard", {}).get("port", 2742)
-    print(f"[kernora] dashboard at http://localhost:{port}")
+    print(f"[nora] dashboard at http://localhost:{port}")
     app.run(host="127.0.0.1", port=port, debug=False)

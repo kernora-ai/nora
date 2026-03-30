@@ -97,4 +97,4 @@ def notify(title: str, body: str):
     if method in ("auto", "discord"):
         if _try_discord(title, body):
             return
-    print(f"[kernora] {title}: {body}", file=sys.stderr)
+    print(f"[nora] {title}: {body}", file=sys.stderr)
