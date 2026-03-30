@@ -18,6 +18,7 @@ Tools:
   nora_session             — get details for a specific session
   nora_scope_validation    — validate planned execution scope before multi-file edits
   nora_skills              — fetch distilled methodology from past sessions
+  nora_dashboard           — full intelligence dashboard inline (KPIs, patterns, decisions, bugs)
 
 SECURITY: Read-only access to local echo.db. No writes (except nora_metrics for scope validation).
           No network calls beyond MCP stdio.
@@ -27,7 +28,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 # MCP SDK
 from mcp.server import Server
@@ -178,7 +179,7 @@ class NoraServer:
             ]
 
         @self.server.call_tool()
-        async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Route tool calls to handlers."""
             try:
                 if name == "nora_search":
@@ -230,6 +231,8 @@ class NoraServer:
 
     def _search(self, query: str) -> str:
         """Search across patterns, decisions, bugs, insights via FTS5."""
+        if not query or not query.strip():
+            return "Please provide a search query."
         try:
             conn = self._connect_db()
             cursor = conn.cursor()
@@ -283,7 +286,7 @@ class NoraServer:
 
     # ── Patterns ─────────────────────────────────────────────────────────────
 
-    def _patterns(self, project: str | None = None, min_effectiveness: float = 0) -> str:
+    def _patterns(self, project: Optional[str] = None, min_effectiveness: float = 0) -> str:
         """List effective patterns."""
         try:
             conn = self._connect_db()
@@ -320,7 +323,7 @@ class NoraServer:
 
     # ── Decisions ────────────────────────────────────────────────────────────
 
-    def _decisions(self, project: str | None = None) -> str:
+    def _decisions(self, project: Optional[str] = None) -> str:
         """List architectural decisions."""
         try:
             conn = self._connect_db()
@@ -360,7 +363,7 @@ class NoraServer:
 
     # ── Bugs ─────────────────────────────────────────────────────────────────
 
-    def _bugs(self, status: str = "open", severity: str | None = None) -> str:
+    def _bugs(self, status: str = "open", severity: Optional[str] = None) -> str:
         """List known bugs."""
         try:
             conn = self._connect_db()
@@ -504,7 +507,7 @@ class NoraServer:
 
     # ── Scope Validation (from original kernora_mcp.py) ──────────────────────
 
-    def _scope_validation(self, intent: str, files: list[str]) -> str:
+    def _scope_validation(self, intent: str, files: List[str]) -> str:
         """Validate planned execution scope before multi-file edits."""
         intent_lower = intent.lower()
 
@@ -579,7 +582,7 @@ class NoraServer:
 
     # ── Helper: load skills from DB ──────────────────────────────────────────
 
-    def _load_skills(self, limit: int = 10) -> list[str]:
+    def _load_skills(self, limit: int = 10) -> List[str]:
         """Pull the most recent skill_opportunity strings from echo.db."""
         try:
             if not DB_PATH.exists():
@@ -598,7 +601,7 @@ class NoraServer:
 
     # ── Helper: load top bugs from DB ────────────────────────────────────────
 
-    def _load_top_bugs(self, limit: int = 5) -> list[dict]:
+    def _load_top_bugs(self, limit: int = 5) -> List[dict]:
         """Pull the most frequently identified bug patterns."""
         try:
             if not DB_PATH.exists():
@@ -609,14 +612,14 @@ class NoraServer:
                 "ORDER BY id DESC LIMIT 20"
             ).fetchall()
             conn.close()
-            all_bugs: list[dict] = []
+            all_bugs: List[dict] = []
             for r in rows:
                 try:
                     all_bugs.extend(json.loads(r[0]))
                 except Exception:
                     pass
             # Deduplicate by title
-            seen: dict[str, dict] = {}
+            seen: Dict[str, dict] = {}
             for b in all_bugs:
                 title = b.get("title", "")
                 if title and title not in seen:

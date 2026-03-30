@@ -49,61 +49,80 @@ If none are set, ask the user to provide one. They can also use local Ollama —
 
 ### Step 4: Install Kiro Hooks
 
-Create the following hooks in `.kiro/hooks/` for this workspace:
+Copy `hooks.json` to `.kiro/hooks/` in the workspace. This registers all four hooks:
 
-**Hook: nora-session-capture** (triggers on Agent Stop)
 ```json
 {
-  "enabled": true,
-  "name": "Nora Session Capture",
-  "description": "Captures session transcript and sends to Nora for analysis",
-  "version": "1",
-  "when": { "type": "agentStop" },
-  "then": {
-    "type": "runCommand",
-    "command": "python3 ~/.kernora/app/kiro_stop.py"
+  "hooks": {
+    "agentSpawn": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.kiro/hooks/kiro_agent_spawn.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.kiro/hooks/kiro_stop.py",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "preToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.kiro/hooks/kiro_spec_shield.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "postToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.kiro/hooks/kiro_post_tool.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-**Hook: nora-tool-shield** (triggers on Pre Tool Use)
-```json
-{
-  "enabled": true,
-  "name": "Nora Tool Shield",
-  "description": "Validates tool invocations against danger patterns and learned anti-patterns",
-  "version": "1",
-  "when": { "type": "preToolUse" },
-  "then": {
-    "type": "runCommand",
-    "command": "python3 ~/.kernora/app/kiro_spec_shield.py"
-  }
-}
-```
+The four hooks:
 
-**Hook: nora-tool-monitor** (triggers on Post Tool Use)
-```json
-{
-  "enabled": true,
-  "name": "Nora Tool Monitor",
-  "description": "Checks tool output against known error signatures from past sessions",
-  "version": "1",
-  "when": { "type": "postToolUse" },
-  "then": {
-    "type": "runCommand",
-    "command": "python3 ~/.kernora/app/kiro_post_tool.py"
-  }
-}
-```
+- **agentSpawn** — checks daemon health, verifies steering freshness, auto-starts daemon if down
+- **stop** — captures session transcript, sends to Nora daemon for analysis (async)
+- **preToolUse** — validates tool invocations against danger patterns and learned anti-patterns
+- **postToolUse** — checks tool output against known error signatures from past sessions
 
 ### Step 5: Copy Hook Scripts
 
-If the hook Python scripts don't exist at `~/.kernora/app/kiro_*.py`, download them:
+Download hook scripts to `~/.kiro/hooks/`:
 
 ```bash
-for f in kiro_stop.py kiro_spec_shield.py kiro_post_tool.py steering_writer.py; do
-  [ ! -f "$HOME/.kernora/app/$f" ] && curl -sfL "https://raw.githubusercontent.com/kernora-ai/kiro-claw/main/hooks/$f" -o "$HOME/.kernora/app/$f"
+mkdir -p ~/.kiro/hooks
+for f in kiro_agent_spawn.py kiro_stop.py kiro_spec_shield.py kiro_post_tool.py steering_writer.py; do
+  [ ! -f "$HOME/.kiro/hooks/$f" ] && curl -sfL "https://raw.githubusercontent.com/kernora-ai/kiro-claw/main/hooks/$f" -o "$HOME/.kiro/hooks/$f"
 done
+chmod +x ~/.kiro/hooks/*.py
 ```
 
 ### Step 6: Generate Initial Steering
@@ -111,7 +130,7 @@ done
 Run the steering writer to generate initial steering files:
 
 ```bash
-python3 ~/.kernora/app/steering_writer.py
+python3 ~/.kiro/hooks/steering_writer.py
 ```
 
 This creates `~/.kiro/steering/nora-patterns.md`, `nora-decisions.md`, and `nora-antipatterns.md`. These are read by Kiro automatically on every prompt.
@@ -209,7 +228,7 @@ port = 2742                 # dashboard port
 ```
 
 ### No steering files generated
-Run manually: `python3 ~/.kernora/app/steering_writer.py`
+Run manually: `python3 ~/.kiro/hooks/steering_writer.py`
 If echo.db is empty, complete a few coding sessions first.
 
 ### MCP server not connecting
