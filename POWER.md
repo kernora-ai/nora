@@ -144,6 +144,7 @@ Nora's MCP server provides read-only access to your session intelligence databas
 - **nora_session** — Get full details for a specific session by ID. Required: `session_id` (string).
 - **nora_scope_validation** — Validate that planned execution scope is focused and safe before multi-file edits. Required: `intent` (string). Optional: `files_to_touch` (string array).
 - **nora_skills** — Fetch distilled methodology from your team's highest-quality sessions.
+- **nora_dashboard** — Full intelligence dashboard inline: KPIs, top patterns, recent decisions, open bugs, recent sessions, knowledge domains. Say "show dashboard" or "Nora status".
 
 ## When to Load Steering Files
 

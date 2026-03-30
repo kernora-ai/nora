@@ -165,6 +165,16 @@ class NoraServer:
                     ),
                     inputSchema={"type": "object", "properties": {}},
                 ),
+                Tool(
+                    name="nora_dashboard",
+                    description=(
+                        "Full Nora intelligence dashboard: KPIs, top patterns, recent decisions, "
+                        "open bugs, recent sessions, and knowledge domains — all in one view. "
+                        "Use this when the user says 'show dashboard', 'Nora status', or "
+                        "'what has Nora learned'."
+                    ),
+                    inputSchema={"type": "object", "properties": {}},
+                ),
             ]
 
         @self.server.call_tool()
@@ -196,6 +206,8 @@ class NoraServer:
                     )
                 elif name == "nora_skills":
                     result = self._skills()
+                elif name == "nora_dashboard":
+                    result = self._dashboard()
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -612,6 +624,118 @@ class NoraServer:
             return list(seen.values())[:limit]
         except Exception:
             return []
+
+    # ── Dashboard (rich in-IDE view) ──────────────────────────────────────
+
+    def _dashboard(self) -> str:
+        """Full intelligence dashboard — replaces localhost:2742 for in-IDE use."""
+        try:
+            conn = self._connect_db()
+            c = conn.cursor()
+
+            # ── KPIs ──
+            sessions = c.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+            analyzed = c.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 1").fetchone()[0]
+            patterns = c.execute("SELECT COUNT(*) FROM patterns").fetchone()[0]
+            decisions = c.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
+            open_bugs = c.execute("SELECT COUNT(*) FROM reported_bugs WHERE status = 'open'").fetchone()[0]
+            resolved = c.execute("SELECT COUNT(*) FROM reported_bugs WHERE status = 'resolved'").fetchone()[0]
+            tokens = c.execute("SELECT COALESCE(SUM(tokens_in + tokens_out), 0) FROM sessions").fetchone()[0]
+
+            out = "# Nora Intelligence Dashboard\n\n"
+            out += f"**Sessions:** {sessions} captured, {analyzed} analyzed\n"
+            out += f"**Patterns:** {patterns} | **Decisions:** {decisions}\n"
+            out += f"**Bugs:** {open_bugs} open, {resolved} resolved\n"
+            out += f"**Tokens processed:** {tokens:,}\n"
+
+            # ── KIQ Score (Knowledge Intelligence Quotient) ──
+            kiq = min(100, patterns * 2 + decisions * 3 + resolved * 5 + analyzed * 1)
+            out += f"**KIQ Score:** {kiq}/100\n\n"
+
+            # ── Top 5 patterns ──
+            rows = c.execute(
+                "SELECT pattern, effectiveness, domains FROM patterns "
+                "ORDER BY effectiveness DESC LIMIT 5"
+            ).fetchall()
+            if rows:
+                out += "## Top Patterns\n\n"
+                for r in rows:
+                    eff = f"{float(r[1]):.0%}" if r[1] else "—"
+                    domains = r[2] or ""
+                    out += f"- **{r[0]}** ({eff}) {f'[{domains}]' if domains else ''}\n"
+                out += "\n"
+
+            # ── Recent decisions ──
+            rows = c.execute(
+                "SELECT decision, rationale FROM decisions "
+                "ORDER BY created_at DESC LIMIT 3"
+            ).fetchall()
+            if rows:
+                out += "## Recent Decisions\n\n"
+                for r in rows:
+                    rationale = (r[1] or "")[:100]
+                    out += f"- **{r[0]}** — {rationale}\n"
+                out += "\n"
+
+            # ── Open bugs ──
+            rows = c.execute(
+                "SELECT title, severity, fix_code FROM reported_bugs "
+                "WHERE status = 'open' ORDER BY "
+                "CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 "
+                "WHEN 'medium' THEN 3 ELSE 4 END LIMIT 5"
+            ).fetchall()
+            if rows:
+                out += "## Open Bugs\n\n"
+                for r in rows:
+                    fix = (r[2] or "no fix yet")[:80]
+                    out += f"- [{r[1]}] **{r[0]}** — Fix: {fix}\n"
+                out += "\n"
+
+            # ── Recent sessions ──
+            rows = c.execute(
+                "SELECT s.id, s.project, s.ended_at, s.analyzed, "
+                "COALESCE(i.session_type, 'pending'), COALESCE(i.summary, '') "
+                "FROM sessions s LEFT JOIN insights i ON s.id = i.session_id "
+                "ORDER BY s.ended_at DESC LIMIT 5"
+            ).fetchall()
+            if rows:
+                out += "## Recent Sessions\n\n"
+                for r in rows:
+                    proj = (r[1] or "").split("/")[-1] or "unknown"
+                    status = "analyzed" if r[3] else "pending"
+                    stype = r[4] or ""
+                    summary = (r[5] or "")[:100]
+                    out += f"- **{proj}** [{stype}] ({status}) — {summary}\n"
+                out += "\n"
+
+            # ── Knowledge domains ──
+            rows = c.execute(
+                "SELECT knowledge_domains FROM insights "
+                "WHERE knowledge_domains != '[]' AND knowledge_domains IS NOT NULL "
+                "ORDER BY analyzed_at DESC LIMIT 10"
+            ).fetchall()
+            if rows:
+                all_domains = set()
+                for r in rows:
+                    try:
+                        domains = json.loads(r[0])
+                        all_domains.update(d.lower() for d in domains if isinstance(d, str))
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if all_domains:
+                    out += f"## Knowledge Domains\n\n{', '.join(sorted(all_domains))}\n\n"
+
+            conn.close()
+
+            if sessions == 0:
+                out += "\n---\n*No sessions yet. Code normally — Nora captures and learns automatically.*\n"
+
+            return out
+
+        except FileNotFoundError as e:
+            return str(e)
+        except Exception as e:
+            return f"Dashboard error: {str(e)}"
 
     async def run(self):
         """Start the MCP server on stdio."""

@@ -43,11 +43,11 @@ if [ ! -f "$KERNORA_DIR/config.toml" ]; then
 type = "byok"
 
 [model]
-provider = "anthropic"
+provider = "auto"
 
 [bedrock]
 region = "us-east-1"
-model  = "amazon.nova-lite-v1:0"
+model  = "amazon.nova-pro-v1:0"
 
 [analysis]
 run_every_minutes = 60
@@ -109,24 +109,48 @@ if [ "$(uname)" = "Darwin" ]; then
     mkdir -p "$LAUNCH_AGENTS"
     WHOAMI=$(whoami)
 
+    # Detect all available API keys for LaunchAgent injection
     DETECTED_KEY="${ANTHROPIC_API_KEY:-}"
-    if [ -z "$DETECTED_KEY" ]; then
+    DETECTED_GEMINI="${GEMINI_API_KEY:-}"
+    DETECTED_OPENAI="${OPENAI_API_KEY:-}"
+    DETECTED_AWS_KEY="${AWS_ACCESS_KEY_ID:-}"
+    DETECTED_AWS_SECRET="${AWS_SECRET_ACCESS_KEY:-}"
+    DETECTED_AWS_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+
+    if [ -z "$DETECTED_KEY" ] && [ -z "$DETECTED_GEMINI" ] && [ -z "$DETECTED_AWS_KEY" ]; then
         echo ""
-        echo "→ No ANTHROPIC_API_KEY found in current shell."
-        echo "  Enter your Anthropic API key for the background daemon,"
-        echo "  or press Enter to skip (use Bedrock/Ollama instead):"
+        echo "→ No API keys found in current shell."
+        echo "  Enter an Anthropic API key for the background daemon,"
+        echo "  or press Enter to skip (Bedrock/Gemini/Ollama auto-detected at runtime):"
         read -r -s DETECTED_KEY
         echo ""
     fi
 
-    ENV_BLOCK=""
-    if [ -n "$DETECTED_KEY" ]; then
-        ENV_BLOCK="  <key>EnvironmentVariables</key>
-  <dict>
+    # Build EnvironmentVariables plist block with all detected keys
+    ENV_ENTRIES=""
+    [ -n "$DETECTED_KEY" ] && ENV_ENTRIES="${ENV_ENTRIES}
     <key>ANTHROPIC_API_KEY</key>
-    <string>${DETECTED_KEY}</string>
+    <string>${DETECTED_KEY}</string>"
+    [ -n "$DETECTED_GEMINI" ] && ENV_ENTRIES="${ENV_ENTRIES}
+    <key>GEMINI_API_KEY</key>
+    <string>${DETECTED_GEMINI}</string>"
+    [ -n "$DETECTED_OPENAI" ] && ENV_ENTRIES="${ENV_ENTRIES}
+    <key>OPENAI_API_KEY</key>
+    <string>${DETECTED_OPENAI}</string>"
+    [ -n "$DETECTED_AWS_KEY" ] && ENV_ENTRIES="${ENV_ENTRIES}
+    <key>AWS_ACCESS_KEY_ID</key>
+    <string>${DETECTED_AWS_KEY}</string>
+    <key>AWS_SECRET_ACCESS_KEY</key>
+    <string>${DETECTED_AWS_SECRET}</string>
+    <key>AWS_DEFAULT_REGION</key>
+    <string>${DETECTED_AWS_REGION}</string>"
+
+    ENV_BLOCK=""
+    if [ -n "$ENV_ENTRIES" ]; then
+        ENV_BLOCK="  <key>EnvironmentVariables</key>
+  <dict>${ENV_ENTRIES}
   </dict>"
-        echo "✓ API key injected into daemon LaunchAgent"
+        echo "✓ API credentials injected into daemon LaunchAgent"
     fi
 
     cat > "$LAUNCH_AGENTS/ai.kernora.daemon.plist" << PLIST
@@ -197,10 +221,11 @@ echo "  │  Dashboard  →  http://localhost:2742                             �
 echo "  │  MCP server →  registered in ~/.claude/.mcp.json                 │"
 echo "  │  Config     →  ~/.kernora/config.toml                            │"
 echo "  │                                                                   │"
-echo "  │  Next: install a claw to connect your AI coding agent:           │"
+echo "  │  Next: connect your AI coding agent:                              │"
 echo "  │                                                                   │"
+echo "  │    Kiro:         Powers panel → Add from GitHub →                │"
+echo "  │                  https://github.com/kernora-ai/nora              │"
 echo "  │    Claude Code:  claude plugin add kernora-ai/claude-claw        │"
-echo "  │    Kiro:         ext install kernora-ai.kiro-claw                │"
 echo "  │                                                                   │"
 echo "  └──────────────────────────────────────────────────────────────────┘"
 echo ""
