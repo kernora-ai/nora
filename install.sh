@@ -82,18 +82,30 @@ fi
 mkdir -p "$HOOK_DIR"
 cp "$REPO_DIR/hook.py" "$HOOK_DIR/kernora_hook.py"
 cp "$REPO_DIR/nora_context.py" "$HOOK_DIR/nora_context.py"
-chmod +x "$HOOK_DIR/kernora_hook.py" "$HOOK_DIR/nora_context.py"
+cp "$REPO_DIR/kiro_spec_shield.py" "$HOOK_DIR/nora_pretool.py"
+cp "$REPO_DIR/kiro_post_tool.py" "$HOOK_DIR/nora_posttool.py"
+cp "$REPO_DIR/nora_session_start.py" "$HOOK_DIR/nora_session_start.py"
+cp "$REPO_DIR/nora_precompact.py" "$HOOK_DIR/nora_precompact.py"
+chmod +x "$HOOK_DIR/kernora_hook.py" "$HOOK_DIR/nora_context.py" "$HOOK_DIR/nora_pretool.py" "$HOOK_DIR/nora_posttool.py" "$HOOK_DIR/nora_session_start.py" "$HOOK_DIR/nora_precompact.py"
 echo "✓ Hooks installed at ~/.claude/hooks/"
-echo "  → kernora_hook.py (session capture on Stop)"
 echo "  → nora_context.py (context injection on UserPromptSubmit)"
+echo "  → nora_pretool.py (anti-pattern blocking on PreToolUse)"
+echo "  → nora_posttool.py (error matching on PostToolUse)"
+echo "  → nora_session_start.py (project context on SessionStart)"
+echo "  → nora_precompact.py (context save on PreCompact)"
+echo "  → kernora_hook.py (session capture on Stop)"
 
 # ── 6. Register hooks in Claude Code settings ────────────────────────────────
 STOP_HOOK="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/kernora_hook.py\",\"async\":true}]}"
 CONTEXT_HOOK="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_context.py\",\"timeout\":3}]}"
+PRETOOL_HOOK="{\"matcher\":\"Write|Edit|Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_pretool.py\",\"timeout\":5}]}"
+POSTTOOL_HOOK="{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_posttool.py\",\"async\":true}]}"
+SESSION_START_HOOK="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_session_start.py\",\"timeout\":5}]}"
+PRECOMPACT_HOOK="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.claude/hooks/nora_precompact.py\",\"timeout\":3}]}"
 if [ -f "$SETTINGS" ] && command -v jq &>/dev/null; then
     # Append to existing settings cleanly
     tmp=$(mktemp)
-    jq ".hooks.Stop += [$STOP_HOOK] | .hooks.UserPromptSubmit += [$CONTEXT_HOOK]" "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
+    jq ".hooks.Stop += [$STOP_HOOK] | .hooks.UserPromptSubmit += [$CONTEXT_HOOK] | .hooks.PreToolUse += [$PRETOOL_HOOK] | .hooks.PostToolUse += [$POSTTOOL_HOOK] | .hooks.SessionStart += [$SESSION_START_HOOK] | .hooks.PreCompact += [$PRECOMPACT_HOOK]" "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
     echo "✓ Hooks registered in ~/.claude/settings.json"
 elif [ ! -f "$SETTINGS" ]; then
     mkdir -p "$(dirname "$SETTINGS")"
@@ -101,6 +113,10 @@ elif [ ! -f "$SETTINGS" ]; then
 {
   "hooks": {
     "UserPromptSubmit": [$CONTEXT_HOOK],
+    "PreToolUse": [$PRETOOL_HOOK],
+    "PostToolUse": [$POSTTOOL_HOOK],
+    "SessionStart": [$SESSION_START_HOOK],
+    "PreCompact": [$PRECOMPACT_HOOK],
     "Stop": [$STOP_HOOK]
   }
 }
@@ -108,8 +124,27 @@ SETTINGS_EOF
     echo "✓ Created ~/.claude/settings.json with Nora hooks"
 else
     echo "⚠  jq not found. Add these hooks to ~/.claude/settings.json manually:"
-    echo "   Stop: $STOP_HOOK"
     echo "   UserPromptSubmit: $CONTEXT_HOOK"
+    echo "   PreToolUse: $PRETOOL_HOOK"
+    echo "   PostToolUse: $POSTTOOL_HOOK"
+    echo "   SessionStart: $SESSION_START_HOOK"
+    echo "   PreCompact: $PRECOMPACT_HOOK"
+    echo "   Stop: $STOP_HOOK"
+fi
+
+# ── 6b. Register Nora MCP server in Claude Code ─────────────────────────────
+MCP_CONFIG="$HOME/.claude/.mcp.json"
+NORA_MCP="{\"command\":\"$PYTHON\",\"args\":[\"$REPO_DIR/nora_mcp.py\"]}"
+if [ -f "$MCP_CONFIG" ] && command -v jq &>/dev/null; then
+    tmp=$(mktemp)
+    jq ".mcpServers.nora = $NORA_MCP" "$MCP_CONFIG" > "$tmp" && mv "$tmp" "$MCP_CONFIG"
+    echo "✓ Nora MCP server registered in ~/.claude/.mcp.json"
+elif [ ! -f "$MCP_CONFIG" ]; then
+    mkdir -p "$(dirname "$MCP_CONFIG")"
+    echo "{\"mcpServers\":{\"nora\":$NORA_MCP}}" | jq . > "$MCP_CONFIG"
+    echo "✓ Created ~/.claude/.mcp.json with Nora MCP server"
+else
+    echo "⚠  jq not found. Add Nora MCP to ~/.claude/.mcp.json manually."
 fi
 
 # ── 7. Kiro hooks (if Kiro is installed) ─────────────────────────────────────
@@ -279,9 +314,9 @@ echo "  │  Dashboard  →  http://localhost:2742                             �
 echo "  │  Config     →  ~/.kernora/config.toml                            │"
 echo "  │                                                                   │"
 if [ "$KIRO_DETECTED" = true ]; then
-echo "  │  Kiro: 5 hooks active  ·  Claude Code: 2 hooks active           │"
+echo "  │  Kiro: 5 hooks active  ·  Claude Code: 6 hooks + MCP active    │"
 else
-echo "  │  Claude Code: 2 hooks active                                     │"
+echo "  │  Claude Code: 6 hooks + MCP server active                       │"
 fi
 echo "  │                                                                   │"
 echo "  │  Verify:  curl -s localhost:2742 | head -5                       │"

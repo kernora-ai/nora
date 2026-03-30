@@ -57,7 +57,7 @@ def spool(payload: dict):
     sid = payload.get("session_id", "unknown")[:8]
     path = SPOOL / f"{ts}_{sid}.json"
     path.write_text(json.dumps(payload))
-    print(f"[kernora] daemon offline — spooled {path.name}", file=sys.stderr)
+    print(f"[nora] daemon offline — spooled {path.name}", file=sys.stderr)
 
 
 def main():
@@ -90,7 +90,7 @@ def main():
     if not send_to_daemon(payload):
         spool(payload)
     else:
-        print(f"[kernora] sent session {session_id[:8]}", file=sys.stderr)
+        print(f"[nora] sent session {session_id[:8]}", file=sys.stderr)
 
 
 if __name__ == "__main__":
