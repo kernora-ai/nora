@@ -1026,6 +1026,75 @@ class NoraServer:
                     out += f"- **{proj}** [{stype}] ({status}) — {summary}\n"
                 out += "\n"
 
+            # ── Session type breakdown ──
+            rows = c.execute(
+                "SELECT session_type, COUNT(*) as cnt FROM insights "
+                "WHERE session_type IS NOT NULL AND session_type != '' "
+                "GROUP BY session_type ORDER BY cnt DESC LIMIT 8"
+            ).fetchall()
+            if rows:
+                out += "## Session Types\n\n"
+                for r in rows:
+                    out += f"- {r[0]}: {r[1]}\n"
+                out += "\n"
+
+            # ── CLAUDE.md rules ──
+            rows = c.execute(
+                "SELECT claude_md_rules FROM insights "
+                "WHERE claude_md_rules IS NOT NULL AND claude_md_rules != '[]' "
+                "ORDER BY analyzed_at DESC LIMIT 10"
+            ).fetchall()
+            all_rules = []  # type: List[str]
+            for r in rows:
+                try:
+                    rules = json.loads(r[0])
+                    for rule in rules:
+                        if isinstance(rule, str) and rule.strip() and rule not in all_rules:
+                            all_rules.append(rule)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if all_rules:
+                out += f"## CLAUDE.md Rules ({len(all_rules)} distilled)\n\n"
+                for rule in all_rules[:8]:
+                    out += f"- {rule}\n"
+                out += "\n"
+
+            # ── Playbooks ──
+            rows = c.execute(
+                "SELECT playbook, session_type, summary FROM insights "
+                "WHERE playbook IS NOT NULL AND length(playbook) > 20 "
+                "ORDER BY analyzed_at DESC LIMIT 3"
+            ).fetchall()
+            if rows:
+                out += "## Playbooks\n\n"
+                for r in rows:
+                    stype = r[1] or "session"
+                    out += f"**{stype}**: {r[0][:200]}\n\n"
+
+            # ── Anti-patterns ──
+            rows = c.execute(
+                "SELECT anti_patterns FROM insights "
+                "WHERE anti_patterns IS NOT NULL AND anti_patterns != '[]' "
+                "ORDER BY analyzed_at DESC LIMIT 10"
+            ).fetchall()
+            all_anti = []  # type: List[str]
+            for r in rows:
+                try:
+                    patterns = json.loads(r[0])
+                    for ap in patterns:
+                        if isinstance(ap, dict):
+                            text = ap.get("pattern", "")
+                            if text and text not in all_anti:
+                                fix = ap.get("fix", "")
+                                all_anti.append(f"{text}" + (f" — Fix: {fix}" if fix else ""))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if all_anti:
+                out += "## Anti-Patterns to Avoid\n\n"
+                for ap in all_anti[:5]:
+                    out += f"- {ap}\n"
+                out += "\n"
+
             # ── Knowledge domains ──
             rows = c.execute(
                 "SELECT knowledge_domains FROM insights "
@@ -1033,7 +1102,7 @@ class NoraServer:
                 "ORDER BY analyzed_at DESC LIMIT 10"
             ).fetchall()
             if rows:
-                all_domains = set()
+                all_domains = set()  # type: set
                 for r in rows:
                     try:
                         domains = json.loads(r[0])
@@ -1042,6 +1111,21 @@ class NoraServer:
                         pass
                 if all_domains:
                     out += f"## Knowledge Domains\n\n{', '.join(sorted(all_domains))}\n\n"
+
+            # ── Pending analysis ──
+            pending_db = c.execute(
+                "SELECT COUNT(*) FROM sessions WHERE analyzed = 0"
+            ).fetchone()[0]
+            pending_spool = 0
+            if SPOOL_DIR.exists():
+                pending_spool = len(list(SPOOL_DIR.glob("kiro_*.json")))
+            total_pending = pending_db + pending_spool
+            if total_pending > 0:
+                out += (
+                    f"## Pending Analysis\n\n"
+                    f"**{total_pending} session{'s' if total_pending != 1 else ''}** waiting. "
+                    f"Call `nora_analyze_pending` to process them.\n\n"
+                )
 
             conn.close()
 

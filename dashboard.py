@@ -82,6 +82,18 @@ h3{margin:0 0 .5rem;font-size:.8rem;color:#6a8aaa;font-weight:500}
 
 HTMX = '<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.12/htmx.min.js"></script>'
 
+# Inline SVG favicon (data URI)
+FAVICON = (
+    '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,'
+    '%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22%3E'
+    '%3Crect width=%22128%22 height=%22128%22 rx=%2228%22 fill=%22%230b0f1a%22/%3E'
+    '%3Ccircle cx=%2264%22 cy=%2264%22 r=%2240%22 fill=%22none%22 stroke=%22%231D9E75%22 '
+    'stroke-width=%223%22 opacity=%220.4%22/%3E'
+    '%3Ccircle cx=%2264%22 cy=%2264%22 r=%2212%22 fill=%22%231D9E75%22/%3E'
+    '%3Ccircle cx=%2264%22 cy=%2264%22 r=%226%22 fill=%22%2300bcd4%22/%3E'
+    '%3C/svg%3E">'
+)
+
 
 def get_conn():
     c = sqlite3.connect(DB, check_same_thread=False, timeout=15.0)
@@ -247,10 +259,10 @@ def shell(title: str, content: str, active: str) -> str:
     llm = probe_llm()
     llm_dot = _llm_status_html(llm)
     return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Kernora — {title}</title>
-{CSS}{HTMX}</head><body>
+<html><head><meta charset="utf-8"><title>Nora — {title}</title>
+{FAVICON}{CSS}{HTMX}</head><body>
 <div class="topbar">
-  <span class="logo">&#9678; kernora<span>.ai</span>{badge}</span>
+  <span class="logo">&#9678; nora<span> by kernora</span>{badge}</span>
   <span style="font-size:.7rem;color:#2e4460;display:flex;align-items:center;gap:16px;">
     AI Work Intelligence &middot; {mode} mode
     &nbsp;&nbsp;{llm_dot}
@@ -716,44 +728,14 @@ def settings():
     c = load_cfg()
     if request.method == "POST":
         new_provider = request.form.get("provider", c.get("model", {}).get("provider", "anthropic"))
-        
-        # Telemetry Swarm Cloud Payload
-        s3_bucket = request.form.get("s3_bucket", "")
-        s3_region = request.form.get("s3_region", "")
-        aws_access = request.form.get("aws_access", "")
-        aws_secret = request.form.get("aws_secret", "")
-        is_managed = request.form.get("is_managed", "false")
-        director_mode = request.form.get("director_mode", "false")
-        
         text = CFG.read_text() if CFG.exists() else ""
         text = re.sub(r'provider\s*=\s*"[^"]*"', f'provider = "{new_provider}"', text)
-        
-        # Matrix to robustly write S3 values natively into the local TOML configurations
-        if "[swarm]" not in text:
-            text += f"\n\n[swarm]\ntype = 'byok_s3'\nbucket = '{s3_bucket}'\nregion = '{s3_region}'\ndirector_mode = {director_mode}\n\n[aws]\naccess_key = '{aws_access}'\nsecret_key = '{aws_secret}'\n"
-        else:
-            text = re.sub(r'bucket\s*=\s*"[^"]*"', f'bucket = "{s3_bucket}"', text)
-            text = re.sub(r'region\s*=\s*"[^"]*"', f'region = "{s3_region}"', text)
-            text = re.sub(r'director_mode\s*=\s*(true|false)', f'director_mode = {director_mode}', text)
-            text = re.sub(r'access_key\s*=\s*"[^"]*"', f'access_key = "{aws_access}"', text)
-            text = re.sub(r'secret_key\s*=\s*"[^"]*"', f'secret_key = "{aws_secret}"', text)
-
-        # Simulate Provisioning SLA logic natively
-        if is_managed == "true":
-            if "type = 'byok_s3'" in text:
-                text = text.replace("type = 'byok_s3'", "type = 'kernora_managed'")
-            
         CFG.write_text(text)
         return redirect("/settings")
 
     mode     = c.get("mode", {}).get("type", "byok")
     provider = c.get("model", {}).get("provider", "anthropic")
     port     = c.get("dashboard", {}).get("port", 2742)
-    
-    swarm_cfg = c.get("swarm", {})
-    bucket = swarm_cfg.get("bucket", "")
-    region = swarm_cfg.get("region", "")
-    d_mode = "checked" if str(swarm_cfg.get("director_mode", "false")).lower() == "true" else ""
 
     # Tiered model detection
     try:
@@ -806,46 +788,10 @@ def settings():
       </div>
       {''.join(f'<div style="margin-top:.5rem;font-size:.7rem;color:#D85A30;border-left:2px solid #D85A30;padding-left:8px">{html.escape(w)}</div>' for w in model_warnings)}
     </div>
-    
-    <div class="card" style="margin-top:1.5rem; border: 1px solid #1e2d45;">
-      <h3 style="color:#dce8f5; border-bottom: 1px solid #1e2d45; padding-bottom: 0.5rem; margin-bottom: 0;">Enterprise Swarm Cloud</h3>
-      <p style="font-size: 0.75rem; color: #6a8aaa; margin-top: 8px;">Synchronize your local SOTA methodologies across your entire engineering team instantly.</p>
-      
-      <form method="POST" style="margin-top: 1rem;">
-        <input type="hidden" name="provider" value="{provider}">
-        
-        <label style="font-size:0.75rem; color:#6a8aaa; display:block; margin-top:10px;">AWS IAM Configuration (BYOK)</label>
-        <div style="font-size:0.65rem; color:#888780; margin-bottom: 6px;">How to generate securely: AWS Console &rarr; IAM &rarr; Users &rarr; Create Access Key.</div>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <input type="text" name="aws_access" placeholder="Access Key ID" style="width:50%;">
-          <input type="password" name="aws_secret" placeholder="Secret Access Key" style="width:50%; background:#111820; border:1px solid #1e2d45; color:#dce8f5; border-radius:4px; padding:3px 8px;">
-        </div>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <input type="text" name="s3_bucket" value="{bucket}" placeholder="enterprise-swarm-bucket" style="width:50%;">
-          <input type="text" name="s3_region" value="{region}" placeholder="us-east-1" style="width:50%;">
-        </div>
-        
-        <div style="margin: 15px 0; border-top: 1px dotted #1e2d45; padding-top: 15px;">
-           <label style="font-size:0.75rem; color:#6a8aaa; display:block;">Or use Kernora Managed Infrastructure</label>
-           <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
-             <span style="font-size:0.65rem; color:#888780;">Zero Setup. 100% Encrypted SLA. Automatically eject data to your AWS bucket anytime.</span>
-             <button type="button" onclick="document.getElementById('managed_toggle').value='true'; this.form.submit()" style="color:#1D9E75; border-color:#1D9E75;">Provision Organization Cloud</button>
-             <input type="hidden" id="managed_toggle" name="is_managed" value="false">
-           </div>
-        </div>
-
-        <div style="margin: 15px 0; border-top: 1px dotted #1e2d45; padding-top: 15px; display:flex; align-items:center; gap:8px;">
-           <input type="checkbox" name="director_mode" value="true" {d_mode}>
-           <span style="font-size:0.75rem; color:#dce8f5;">Enable Director Hub View (Global Network Analytics)</span>
-        </div>
-
-        <button type="submit" style="width:100%; margin-top:10px; background:#1e2d45; color:white;">Save Swarm Protocol Config</button>
-      </form>
-    </div>
 
     <div class="privacy">
-      &#9678; BYOK mode &mdash; zero bytes sent to Kernora.<br>
-      Your transcripts, your secret keys, your machine. Kernora provides execution code only.
+      &#9678; 100% local &mdash; zero bytes sent to Kernora.<br>
+      Your transcripts, your API keys, your machine. Kernora provides code only.
     </div>"""
     return shell("Settings", content, "Settings")
 
@@ -865,7 +811,7 @@ def llm_status_api():
     return s  # JSON for programmatic callers
 
 
-def _dot(ok: bool | None) -> str:
+def _dot(ok) -> str:  # ok: Optional[bool]
     color = "#1D9E75" if ok else ("#e05c5c" if ok is False else "#7a8a9e")
     return f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{color};flex-shrink:0;"></span>'
 
