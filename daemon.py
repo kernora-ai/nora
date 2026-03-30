@@ -101,6 +101,17 @@ def analysis_loop():
                 except Exception as e:
                     log(f"analysis failed for {session['id'][:8]}: {e}")
 
+            # Regenerate Kiro steering files after analysis batch
+            try:
+                from steering_writer import generate_all
+                generated = generate_all()
+                if generated:
+                    log(f"steering files updated: {len(generated)} files")
+            except ImportError:
+                pass  # steering_writer not available — OK
+            except Exception as e:
+                log(f"steering generation failed: {e}")
+
         except Exception as e:
             log(f"analysis loop error: {e}")
 

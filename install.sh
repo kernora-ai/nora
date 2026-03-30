@@ -6,7 +6,10 @@ set -e
 
 KERNORA_DIR="$HOME/.kernora"
 HOOK_DIR="$HOME/.claude/hooks"
+KIRO_HOOK_DIR="$HOME/.kiro/hooks"
+KIRO_STEERING_DIR="$HOME/.kiro/steering"
 SETTINGS="$HOME/.claude/settings.json"
+KIRO_SETTINGS="$HOME/.kiro/settings.json"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 
@@ -109,14 +112,69 @@ else
     echo "   UserPromptSubmit: $CONTEXT_HOOK"
 fi
 
-# ── 7. Initialize database ────────────────────────────────────────────────────
+# ── 7. Kiro hooks (if Kiro is installed) ─────────────────────────────────────
+# Kiro uses the same stdin JSON contract as Claude Code.
+# We install ALL 5 hooks: agentSpawn, userPromptSubmit, preToolUse, postToolUse, stop
+KIRO_DETECTED=false
+if [ -d "$HOME/.kiro" ] || command -v kiro &>/dev/null; then
+    KIRO_DETECTED=true
+fi
+
+if [ "$KIRO_DETECTED" = true ]; then
+    mkdir -p "$KIRO_HOOK_DIR" "$KIRO_STEERING_DIR"
+    cp "$REPO_DIR/kiro_agent_spawn.py" "$KIRO_HOOK_DIR/nora_spawn.py"
+    cp "$REPO_DIR/nora_context.py" "$KIRO_HOOK_DIR/nora_context.py"
+    cp "$REPO_DIR/kiro_spec_shield.py" "$KIRO_HOOK_DIR/nora_pretool.py"
+    cp "$REPO_DIR/kiro_post_tool.py" "$KIRO_HOOK_DIR/nora_posttool.py"
+    cp "$REPO_DIR/hook.py" "$KIRO_HOOK_DIR/nora_stop.py"
+    chmod +x "$KIRO_HOOK_DIR"/*.py
+    echo "✓ Kiro hooks installed at ~/.kiro/hooks/"
+
+    # Register hooks in Kiro settings
+    KIRO_SPAWN="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_spawn.py\"}]}"
+    KIRO_PROMPT="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_context.py\",\"timeout\":3}]}"
+    KIRO_PRETOOL="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_pretool.py\",\"timeout\":5}]}"
+    KIRO_POSTTOOL="{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_posttool.py\",\"async\":true}]}"
+    KIRO_STOP="{\"hooks\":[{\"type\":\"command\",\"command\":\"$PYTHON ~/.kiro/hooks/nora_stop.py\",\"async\":true}]}"
+
+    if [ -f "$KIRO_SETTINGS" ] && command -v jq &>/dev/null; then
+        tmp=$(mktemp)
+        jq ".hooks.agentSpawn += [$KIRO_SPAWN] | .hooks.userPromptSubmit += [$KIRO_PROMPT] | .hooks.preToolUse += [$KIRO_PRETOOL] | .hooks.postToolUse += [$KIRO_POSTTOOL] | .hooks.stop += [$KIRO_STOP]" "$KIRO_SETTINGS" > "$tmp" && mv "$tmp" "$KIRO_SETTINGS"
+        echo "✓ Kiro hooks registered in ~/.kiro/settings.json"
+    elif [ ! -f "$KIRO_SETTINGS" ]; then
+        mkdir -p "$(dirname "$KIRO_SETTINGS")"
+        cat > "$KIRO_SETTINGS" << KIRO_EOF
+{
+  "hooks": {
+    "agentSpawn": [$KIRO_SPAWN],
+    "userPromptSubmit": [$KIRO_PROMPT],
+    "preToolUse": [$KIRO_PRETOOL],
+    "postToolUse": [$KIRO_POSTTOOL],
+    "stop": [$KIRO_STOP]
+  }
+}
+KIRO_EOF
+        echo "✓ Created ~/.kiro/settings.json with Nora hooks"
+    else
+        echo "⚠  jq not found. Add Nora hooks to ~/.kiro/settings.json manually."
+    fi
+
+    # Generate initial steering files if DB has data
+    if [ -f "$KERNORA_DIR/echo.db" ]; then
+        "$PYTHON" "$REPO_DIR/steering_writer.py" 2>/dev/null && echo "✓ Kiro steering files generated" || true
+    fi
+else
+    echo "→ Kiro not detected — skipping Kiro hooks (install Kiro, then re-run)"
+fi
+
+# ── 8. Initialize database ────────────────────────────────────────────────────
 "$PYTHON" "$REPO_DIR/db.py"
 
-# ── 8. Stop any existing Kernora processes ────────────────────────────────────
+# ── 9. Stop any existing Kernora processes ────────────────────────────────────
 [ -f "$KERNORA_DIR/daemon.pid" ] && kill "$(cat "$KERNORA_DIR/daemon.pid")" 2>/dev/null && rm "$KERNORA_DIR/daemon.pid" || true
 pkill -f "kernora/dashboard.py" 2>/dev/null || true
 
-# ── 9. Auto-start on login ────────────────────────────────────────────────────
+# ── 10. Auto-start on login ───────────────────────────────────────────────────
 if [ "$(uname)" = "Darwin" ]; then
     mkdir -p "$LAUNCH_AGENTS"
     WHOAMI=$(whoami)
@@ -199,7 +257,7 @@ fi
 
 sleep 2
 
-# ── 10. Smoke test ────────────────────────────────────────────────────────────
+# ── 11. Smoke test ───────────────────────────────────────────────────────────
 echo ""
 if curl -sf http://localhost:2742 > /dev/null 2>&1; then
     echo "✓ Dashboard is live at http://localhost:2742"
@@ -216,12 +274,22 @@ echo "  │  Config       →  ~/.kernora/config.toml                         �
 echo "  │  Logs         →  ~/.kernora/logs/                                │"
 echo "  │                                                                   │"
 echo "  │  What Nora does:                                                 │"
-echo "  │    • Captures every Claude Code session automatically            │"
+echo "  │    • Captures every Claude Code + Kiro session automatically     │"
 echo "  │    • Analyzes patterns, decisions, and tech debt                 │"
 echo "  │    • Injects relevant context into your next session             │"
+echo "  │    • Validates tool use against learned anti-patterns            │"
+echo "  │    • Generates Kiro steering files from your history             │"
 echo "  │    • Tracks it all in your local dashboard                       │"
 echo "  │                                                                   │"
-echo "  │  Start a Claude Code session — Nora is already watching.        │"
+if [ "$KIRO_DETECTED" = true ]; then
+echo "  │  Kiro: All 5 hooks active (spawn/prompt/pretool/posttool/stop)  │"
+echo "  │  Claude Code: 2 hooks active (prompt/stop)                      │"
+else
+echo "  │  Claude Code: 2 hooks active (prompt/stop)                      │"
+echo "  │  Kiro: Install Kiro, then re-run to activate 5 hooks            │"
+fi
+echo "  │                                                                   │"
+echo "  │  Start a session — Nora is already watching.                    │"
 echo "  │                                                                   │"
 echo "  └───────────────────────────────────────────────────────────────────┘"
 echo ""
