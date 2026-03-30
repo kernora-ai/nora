@@ -89,6 +89,18 @@ def init_db():
             ON reported_bugs(session_id);
     """)
 
+    # -- Migrate FTS5 fts_insights if it uses old claude_md_rules column --
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name='fts_insights' AND type='table'"
+        ).fetchone()
+        if row and 'claude_md_rules' in (row[0] or ''):
+            conn.execute("DROP TABLE fts_insights")
+            conn.commit()
+            print("[nora] migrated fts_insights: dropped old claude_md_rules schema")
+    except Exception:
+        pass
+
     # -- FTS5 indexes for context search --
     conn.executescript("""
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_patterns USING fts5(
@@ -139,6 +151,9 @@ def init_db():
         "workflow_stage":          "TEXT DEFAULT ''",
     })
 
+    # ── v3 migration: claude_md_rules → project_rules ─────
+    _migrate_claude_md_to_project_rules(conn)
+
     conn.commit()
     conn.close()
     print(f"[nora] DB initialized at {DB_PATH}")
@@ -151,6 +166,26 @@ def _add_columns(conn: sqlite3.Connection, table: str, columns: dict):
         if col not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
             print(f"[nora] added column {table}.{col}")
+
+
+def _migrate_claude_md_to_project_rules(conn: sqlite3.Connection):
+    """One-time migration: copy claude_md_rules → project_rules, then leave old column."""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(insights)").fetchall()}
+    if "claude_md_rules" in existing and "project_rules" in existing:
+        # Copy data from old column where new column is empty/default
+        conn.execute("""
+            UPDATE insights
+            SET project_rules = claude_md_rules
+            WHERE claude_md_rules IS NOT NULL
+              AND claude_md_rules != '[]'
+              AND (project_rules IS NULL OR project_rules = '[]')
+        """)
+        migrated = conn.execute(
+            "SELECT changes()"
+        ).fetchone()[0]
+        if migrated:
+            print(f"[nora] migrated {migrated} rows: claude_md_rules → project_rules")
+        conn.commit()
 
 
 def store_session(payload: dict):
