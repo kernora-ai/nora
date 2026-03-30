@@ -37,15 +37,21 @@ This installs the engine to `~/.kernora/`, creates a virtual environment, initia
 
 If Nora IS already installed, skip to Step 3.
 
-### Step 3: Configure API Key
+### Step 3: Configure API Key (Optional)
 
-Nora needs one LLM API key for session analysis (BYOK — your key, your machine). Check if any of these environment variables are set:
+Nora works out of the box without any API key. Session capture, pattern extraction (Phase 1), hooks, MCP tools, and steering files all run locally with zero LLM calls.
 
-- `ANTHROPIC_API_KEY` (recommended)
+For deeper semantic analysis (Phase 2), Nora can optionally use an LLM. If the user wants to enable this, check if any of these environment variables are set:
+
+- `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY`
 - `AWS_PROFILE` (for Bedrock)
 
-If none are set, ask the user to provide one. They can also use local Ollama — edit `~/.kernora/config.toml` and set `provider = "ollama"`.
+If none are set, Nora still works — Phase 1 deterministic analysis extracts patterns, file changes, tool usage, and error signatures without any LLM. Phase 2 is a bonus, not a gate.
+
+To use local Ollama instead of a cloud API: edit `~/.kernora/config.toml` and set `provider = "ollama"`.
+
+Skip this step if you just want to get started.
 
 ### Step 4: Install Kiro Hooks
 

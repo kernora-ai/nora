@@ -119,9 +119,9 @@ if [ "$(uname)" = "Darwin" ]; then
 
     if [ -z "$DETECTED_KEY" ] && [ -z "$DETECTED_GEMINI" ] && [ -z "$DETECTED_AWS_KEY" ]; then
         echo ""
-        echo "→ No API keys found in current shell."
-        echo "  Enter an Anthropic API key for the background daemon,"
-        echo "  or press Enter to skip (Bedrock/Gemini/Ollama auto-detected at runtime):"
+        echo "→ No API keys found (optional — Nora works without one)."
+        echo "  Phase 1 analysis (patterns, files, tools) runs locally, zero LLM cost."
+        echo "  For deeper Phase 2 analysis, enter an API key or press Enter to skip:"
         read -r -s DETECTED_KEY
         echo ""
     fi
