@@ -1,39 +1,47 @@
 # Kernora — AI Work Intelligence
 # Elastic License 2.0 — commercial use requires agreement with kernora.ai
+# https://github.com/kernora-ai/nora/blob/main/LICENSE
 #
 # Copy to ~/.kernora/config.toml  (install.sh does this automatically)
 
 [mode]
 type = "byok"
 # "byok"   = your key, your machine — zero bytes to Kernora (default)
-# "team"   = local analysis + structured sync to your S3 bucket (Phase 1)
+# "team"   = local analysis + structured sync to your S3 bucket (coming soon)
 
 [model]
-provider = "anthropic"
-# "anthropic" = ANTHROPIC_API_KEY → claude-haiku-4-5-20251001  (~$0.18/dev/mo)
-# "bedrock"   = AWS_PROFILE → amazon.nova-lite-v1:0           (~$0.012/dev/mo)
-# "google"    = GEMINI_API_KEY → gemini-1.5-pro
-# "openai"    = OPENAI_API_KEY → gpt-4o
-# "grok"      = XAI_API_KEY → grok-beta
-# "ollama"    = localhost:11434 → llama3.2:3b                 (free, local)
-# "auto"      = tries keys in order then bedrock then ollama
+provider = "auto"
+# "auto"      = detects available keys, picks best model per tier (RECOMMENDED)
+# "ide"       = defers to IDE-provided LLM (Kiro, Cursor, VS Code)
+# "local"     = Apple FoundationModels (macOS 26+) or MLX-LM server
+# "anthropic" = ANTHROPIC_API_KEY → Sonnet 4.6 (deep) + Haiku 4.5 (classify)
+# "google"    = GEMINI_API_KEY → Gemini 3.1 Pro (deep) + Gemini 3 Flash (classify)
+# "openai"    = OPENAI_API_KEY → GPT-4o (deep) + GPT-4o-mini (classify)
+# "bedrock"   = AWS_PROFILE → Nova Pro (adequate) + Nova Lite (basic)
+# "grok"      = XAI_API_KEY → Grok Beta
+# "ollama"    = localhost:11434 → local models (free but limited quality)
 
 [bedrock]
 region = "us-east-1"
-model  = "amazon.nova-lite-v1:0"
+model  = "amazon.nova-pro-v1:0"
 
 [google]
-model = "gemini-2.5-pro"
+model = "gemini-3.1-pro-preview"
 
 [openai]
-model = "gpt-5.4-mini"
+model = "gpt-4o"
 
 [grok]
-model = "grok-4.20"
+model = "grok-beta"
 
 [ollama]
-model = "llama3.2:3b"
+model = "llama3.2:8b"
 host  = "http://localhost:11434"
+
+# [local]
+# prefer = "auto"              # "auto" | "foundationmodels" | "mlx"
+# foundationmodels_port = 2744 # Apple FoundationModels (macOS 26+)
+# mlx_port = 2745              # MLX-LM Qwen2.5-Coder-3B (macOS 14+)
 
 [analysis]
 run_every_minutes  = 60
@@ -47,15 +55,3 @@ auto_open = true
 verified = true
 # Confirms Kernora receives zero data in byok mode.
 # Verified by network audit during install.
-
-[swarm]
-type = "byok_s3" 
-# "byok_s3" = You own the S3 Bucket infrastructure explicitly.
-# "kernora_managed" = Auto-provisioned zero-friction bucket natively within Kernora Enterprise AWS.
-director_mode = false
-bucket = "kernora-enterprise-swarm"
-region = "us-east-1"
-
-[aws]
-access_key = ""
-secret_key = ""

@@ -13,8 +13,8 @@ covers the rest of the project.
 1. Fork the repo and create a branch from `main`
 2. Make your changes
 3. Add tests if applicable
-4. Ensure `python3 -m pytest kiro-extension/bundled/test_integrity.py -v` passes
-5. Ensure `python3 -c "from db import init_db; init_db()"` succeeds
+4. Ensure `cd kiro-extension/bundled && python3 -m pytest test_integrity.py -v` passes
+5. Ensure `cd kiro-extension/bundled && python3 -c "from db import init_db; init_db()"` succeeds
 6. Submit a pull request
 
 ## Code Standards
@@ -25,9 +25,19 @@ covers the rest of the project.
   # Elastic License 2.0 — commercial use requires agreement with kernora.ai
   # https://github.com/kernora-ai/nora/blob/main/LICENSE
   ```
-- Python: stdlib only in hook files (hook.py, nora_context.py)
+- Python: stdlib only in hook files (hook.py, nora_context.py) — Tenet 12
 - SQL: parameterized queries only — never interpolate user input
-- All servers bind to localhost only
+- All servers bind to localhost only — Tenet 3
+
+## Project Structure
+
+```
+kiro-extension/           — VS Code / Kiro / Cursor extension
+  bundled/                — Python engine (dashboard, analyzer, db, hooks)
+  src/                    — TypeScript extension code
+kernora-native-mac/       — Swift local LLM server (FoundationModels + MLX-LM)
+docs/                     — Public documentation
+```
 
 ## What We're Looking For
 
@@ -42,6 +52,7 @@ covers the rest of the project.
 - Changes that send data to external servers (violates Tenet 3)
 - New pip dependencies in the hot path (violates Tenet 12)
 - Changes to hook.py that add external imports (violates Tenet 12)
+- Modifications to the AI Leverage Score formula without discussion
 
 ## Questions?
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Kernora — AI Work Intelligence
 # Elastic License 2.0 — commercial use requires agreement with kernora.ai
+# https://github.com/kernora-ai/nora/blob/main/LICENSE
 from __future__ import annotations  # PEP 563: str|None works on Python 3.9+
 import db
 

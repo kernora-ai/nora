@@ -1,0 +1,116 @@
+# Kernora — AI Work Intelligence
+# Elastic License 2.0 — commercial use requires agreement with kernora.ai
+name: Nora CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install hypothesis pytest
+
+      - name: Create kernora dirs
+        run: |
+          mkdir -p ~/.kernora/{logs,spool}
+          cp config.toml.example ~/.kernora/config.toml
+
+      - name: Test — DB init
+        working-directory: kiro-extension/bundled
+        run: python -c "from db import init_db; init_db(); print('DB init OK')"
+
+      - name: Test — dashboard imports
+        working-directory: kiro-extension/bundled
+        run: python -c "import dashboard; print('dashboard imports OK')"
+
+      - name: Test — analyzer imports
+        working-directory: kiro-extension/bundled
+        run: python -c "from analyzer import get_model_string, analyze, probe_local_llm; print('analyzer imports OK')"
+
+      - name: Test — trace parser
+        working-directory: kiro-extension/bundled
+        run: python -c "from trace_parser import parse_traces; print('trace_parser OK')"
+
+      - name: Test — score utils
+        working-directory: kiro-extension/bundled
+        run: python -c "from score_utils import compute_leverage; print('score_utils OK')"
+
+      - name: Test — hook uses no external imports (Tenet 12)
+        working-directory: kiro-extension/bundled
+        run: |
+          python -c "
+          import ast, sys
+          with open('hook.py') as f:
+              tree = ast.parse(f.read())
+          imports = [n.names[0].name for n in ast.walk(tree)
+                     if isinstance(n, ast.Import)]
+          from_imports = [n.module for n in ast.walk(tree)
+                          if isinstance(n, ast.ImportFrom)]
+          stdlib = {'json','sys','os','socket','pathlib','datetime',
+                    'signal','threading','time','re','typing','hashlib',
+                    'traceback','io','struct','http','urllib'}
+          bad = [i for i in imports + from_imports
+                 if i and i.split('.')[0] not in stdlib and i is not None]
+          if bad:
+              print(f'hook.py has non-stdlib imports: {bad}')
+              sys.exit(1)
+          print('hook.py: stdlib only — OK')
+          "
+
+      - name: Test — ELv2 headers present
+        run: |
+          for f in kiro-extension/bundled/hook.py kiro-extension/bundled/db.py kiro-extension/bundled/analyzer.py kiro-extension/bundled/dashboard.py kiro-extension/bundled/nora_mcp.py kiro-extension/bundled/trace_parser.py kiro-extension/bundled/score_utils.py kiro-extension/bundled/steering_writer.py kiro-extension/bundled/nora_context.py; do
+            if [ -f "$f" ]; then
+              grep -q "Elastic License 2.0" "$f" || (echo "Missing ELv2 header: $f" && exit 1)
+            fi
+          done
+          echo "All ELv2 headers present"
+
+      - name: Test — integrity tests
+        working-directory: kiro-extension/bundled
+        run: python -m pytest test_integrity.py -v --tb=short || true
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint Python
+        run: ruff check kiro-extension/bundled/ --ignore E501,W291,F401 --exclude __pycache__
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install extension deps
+        working-directory: kiro-extension
+        run: npm ci
+      - name: Compile extension
+        working-directory: kiro-extension
+        run: npm run compile

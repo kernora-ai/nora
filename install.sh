@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kernora — AI Work Intelligence
 # Elastic License 2.0 — commercial use requires agreement with kernora.ai
-# https://github.com/kernora/kernora
+# https://github.com/kernora-ai/nora/blob/main/LICENSE
 set -e
 
 KERNORA_DIR="$HOME/.kernora"
