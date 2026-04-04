@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nora Remembers So Claude Doesn't Have To — Kernora Blog</title>
+    <meta name="description" content="A real story: Claude wasted 6 attempts deploying a website because it couldn't remember how it deployed the same site 3 hours earlier. Here's how Nora's pre-hook fixes that — with code.">
+    <style>
+        :root {
+            --color-base: #07090d;
+            --color-surface: #0d1117;
+            --color-border: #1a1f2b;
+            --color-teal: #1D9E75;
+            --color-teal-dim: rgba(29,158,117,0.15);
+            --color-text: #c9d1d9;
+            --color-text-muted: #6b7280;
+            --color-text-bright: #f0f6fc;
+            --color-code-bg: #161b22;
+            --color-amber: #d4a844;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--color-base);
+            color: var(--color-text);
+            line-height: 1.8;
+        }
+        /* Nav */
+        nav {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(7,9,13,0.92); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--color-border);
+            padding: 14px 32px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-logo { color: var(--color-text-bright); font-weight: 700; font-size: 17px; text-decoration: none; }
+        .nav-logo span { color: var(--color-teal); }
+        .nav-links a { color: var(--color-text-muted); text-decoration: none; margin-left: 28px; font-size: 14px; }
+        .nav-links a:hover { color: var(--color-text); }
+        .nav-links a.active { color: var(--color-teal); }
+
+        /* Article */
+        article {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 60px 24px 100px;
+        }
+        .article-meta {
+            color: var(--color-text-muted);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-size: 38px;
+            line-height: 1.2;
+            color: var(--color-text-bright);
+            margin-bottom: 24px;
+            font-weight: 700;
+        }
+        .article-subtitle {
+            font-size: 19px;
+            color: var(--color-text-muted);
+            margin-bottom: 48px;
+            line-height: 1.6;
+        }
+        h2 {
+            font-size: 26px;
+            color: var(--color-text-bright);
+            margin: 56px 0 20px;
+            font-weight: 600;
+        }
+        h3 {
+            font-size: 20px;
+            color: var(--color-text-bright);
+            margin: 40px 0 16px;
+            font-weight: 600;
+        }
+        p { margin-bottom: 20px; }
+        a { color: var(--color-teal); }
+
+        /* Code blocks */
+        pre {
+            background: var(--color-code-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 20px 24px;
+            overflow-x: auto;
+            font-size: 13.5px;
+            line-height: 1.7;
+            margin: 24px 0;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+        code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13.5px;
+        }
+        p code {
+            background: var(--color-code-bg);
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .comment { color: #6b7280; }
+        .keyword { color: #d4a844; }
+        .string { color: #a5d6ff; }
+        .fn { color: #d2a8ff; }
+        .output { color: var(--color-teal); }
+
+        /* Callout boxes */
+        .callout {
+            border-left: 3px solid var(--color-teal);
+            background: var(--color-teal-dim);
+            padding: 20px 24px;
+            border-radius: 0 8px 8px 0;
+            margin: 28px 0;
+            font-size: 15px;
+        }
+        .callout-amber {
+            border-left-color: var(--color-amber);
+            background: rgba(212,168,68,0.1);
+        }
+        .callout strong { color: var(--color-text-bright); }
+
+        /* Before/After comparison */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 28px 0;
+        }
+        .comparison-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .comparison-box h4 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .comparison-box.before h4 { color: #f87171; }
+        .comparison-box.after h4 { color: var(--color-teal); }
+        .comparison-box p { font-size: 14px; margin-bottom: 8px; }
+        .comparison-box .step {
+            font-size: 13px;
+            color: var(--color-text-muted);
+            padding: 4px 0;
+        }
+
+        /* CTA */
+        .cta-box {
+            background: var(--color-surface);
+            border: 1px solid var(--color-teal);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin: 60px 0 0;
+        }
+        .cta-box h3 {
+            color: var(--color-text-bright);
+            margin: 0 0 12px;
+            font-size: 22px;
+        }
+        .cta-box p {
+            color: var(--color-text-muted);
+            margin-bottom: 20px;
+        }
+        .cta-install {
+            display: inline-block;
+            background: var(--color-code-bg);
+            border: 1px solid var(--color-border);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-family: 'SF Mono', monospace;
+            font-size: 14px;
+            color: var(--color-teal);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            h1 { font-size: 28px; }
+            .comparison { grid-template-columns: 1fr; }
+            article { padding: 40px 16px 80px; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/" class="nav-logo"><span>◎</span> kernora</a>
+        <div class="nav-links">
+            <a href="/docs">Docs</a>
+            <a href="/blog" class="active">Blog</a>
+            <a href="/pricing">Pricing</a>
+            <a href="https://github.com/kernora-ai" target="_blank">GitHub</a>
+        </div>
+    </nav>
+
+    <article>
+        <div class="article-meta">March 29, 2026 &middot; Mihir Choudhary &middot; 8 min read</div>
+
+        <h1>Nora Remembers So Claude Doesn't Have To</h1>
+
+        <p class="article-subtitle">
+            A real story from today: Claude spent 6 attempts figuring out how to deploy a website it had already deployed 3 hours earlier. The session history was right there in a SQLite database. Nobody asked.
+        </p>
+
+        <h2>The problem, in one sentence</h2>
+
+        <p>
+            AI coding agents are stateless. Every session starts from zero. The pattern you discovered at 2pm is forgotten by 5pm. The deployment sequence you perfected last Tuesday doesn't exist on Wednesday. Your agent makes the same mistakes, tries the same dead ends, rediscovers the same solutions — every single time.
+        </p>
+
+        <p>
+            This isn't a hypothetical. It happened to me today, while building the Kernora website. And because I was building Kernora at the time, I had the unique experience of watching the problem and the solution collide in real time.
+        </p>
+
+        <h2>What actually happened</h2>
+
+        <p>
+            I asked Claude to deploy the Kernora website to Firebase Hosting. Claude had done this exact thing three hours earlier in the same project. The deployment target was the same. The Firebase project was the same. The Cloud Shell was still open in the same browser tab.
+        </p>
+
+        <p>
+            Claude didn't remember any of it.
+        </p>
+
+        <p>
+            Here's what the next twenty minutes looked like:
+        </p>
+
+        <div class="callout callout-amber">
+            <strong>Attempt 1:</strong> <code>firebase deploy --only hosting</code> from the VM. Failed — no auth token.<br>
+            <strong>Attempt 2:</strong> Try to extract OAuth token from Firebase console via JavaScript injection. Failed — console uses proto-over-HTTP2, not standard fetch.<br>
+            <strong>Attempt 3:</strong> Monkey-patch fetch and XHR to intercept tokens. Failed — no tokens captured.<br>
+            <strong>Attempt 4:</strong> Paste commands into Cloud Shell via ClipboardEvent. Failed — xterm.js strips newlines, commands never execute.<br>
+            <strong>Attempt 5:</strong> Synthetic KeyboardEvent dispatches. Failed — garbled output.<br>
+            <strong>Attempt 6:</strong> I finally said: "review this session and look how you deployed the site just a few hours back." Claude read the transcript and found the answer in seconds.
+        </div>
+
+        <p>
+            The answer was simple. The <code>computer</code> tool's <code>type</code> action works with Cloud Shell's xterm.js terminal. Type the command, press Return. That's it. Claude had used this exact method three hours earlier. It worked on the first try.
+        </p>
+
+        <p>
+            Six failed attempts. Twenty minutes. Because the agent couldn't search its own history.
+        </p>
+
+        <h2>The second fumble, same session</h2>
+
+        <p>
+            After figuring out the deploy method, Claude needed to push code to GitHub. It didn't know the repository path. It tried <code>kernora/kernora</code>. Wrong. It tried <code>user/kernora</code>. Wrong. It dug through <code>.git/FETCH_HEAD</code> and found the correct path: <code>kernora-ai/kernora</code>.
+        </p>
+
+        <p>
+            That path had been used in every single session for the past week. Nora's database had it. Nobody queried Nora.
+        </p>
+
+        <h2>What Nora would have done</h2>
+
+        <p>
+            Kernora captures every AI coding session — the full transcript, tools used, files touched, commands run, decisions made. It stores them in a local SQLite database. It analyzes them for patterns, bugs, playbooks, and anti-patterns.
+        </p>
+
+        <p>
+            But capturing isn't enough. The data was sitting there, in <code>~/.kernora/echo.db</code>, with 6 sessions, 16 patterns, 11 bugs, 7 architectural decisions. Nobody asked for it because nobody knew to ask.
+        </p>
+
+        <p>
+            The missing piece was a <strong>pre-hook</strong> — a script that fires before Claude processes each prompt, searches Nora's database for anything relevant, and injects that context automatically. The user doesn't search. The agent doesn't search. The system just knows.
+        </p>
+
+        <p>
+            So I built it. Today. In this session. Here's how it works.
+        </p>
+
+        <h2>The pre-hook: 180 lines of stdlib Python</h2>
+
+        <p>
+            Claude Code supports hook events. The one we need is <code>UserPromptSubmit</code> — it fires after the user types a prompt but before Claude processes it. The hook receives the prompt as JSON on stdin. Anything printed to stdout becomes context that Claude sees.
+        </p>
+
+        <p>
+            The hook script, <code>nora_context.py</code>, does four things:
+        </p>
+
+        <pre><span class="comment"># 1. Extract keywords from the user's prompt</span>
+<span class="keyword">keywords</span> = extract_keywords(prompt)
+<span class="comment"># "how should I handle SQLite connections" → ["sqlite", "connections", "handle"]</span>
+
+<span class="comment"># 2. Search Nora's database across four tables</span>
+<span class="keyword">patterns</span>  = search_patterns(conn, keywords)   <span class="comment"># reusable code patterns</span>
+<span class="keyword">decisions</span> = search_decisions(conn, keywords)  <span class="comment"># architectural decisions + rationale</span>
+<span class="keyword">bugs</span>      = search_bugs(conn, keywords)       <span class="comment"># known bugs, open or resolved</span>
+<span class="keyword">insights</span>  = search_insights(conn, keywords)   <span class="comment"># session playbooks + anti-patterns</span>
+
+<span class="comment"># 3. Format results as context</span>
+<span class="keyword">context</span> = format_context(patterns, decisions, bugs, insights)
+
+<span class="comment"># 4. Print to stdout → Claude sees this before responding</span>
+<span class="fn">print</span>(context)</pre>
+
+        <p>
+            No external dependencies. No network calls. No API keys. It reads a local SQLite file and prints text. The entire script is stdlib Python, runs in under 50ms, and has a 3-second timeout in case the database is locked.
+        </p>
+
+        <h3>What Claude sees</h3>
+
+        <p>
+            When I type "how should I handle SQLite connections in the daemon", Claude now receives this context before it starts thinking:
+        </p>
+
+        <pre><span class="output">─── Nora Context (from past sessions) ───</span>
+<span class="output">[Nora Memory — Relevant Patterns]</span>
+  • Use WAL mode for SQLite when daemon has concurrent readers/writers
+    (effectiveness: 0.95)
+  • Always start daemon with init_db() before accepting connections
+    (effectiveness: 0.9)
+
+<span class="output">[Nora Memory — Past Decisions]</span>
+  • Use SQLite over Firestore for local storage
+    Why: Privacy-first architecture, no cloud dependency
+  • Per-request SQLite connections instead of shared connection pool
+
+<span class="output">[Nora Memory — Known Bugs (unresolved)]</span>
+  • [high] SQLite locked on concurrent writes
+    File: db.py
+  • [high] Thread-unsafe SQLite connection sharing
+    File: daemon_v2.py
+<span class="output">─── End Nora Context ───</span></pre>
+
+        <p>
+            Claude doesn't just answer the question. It answers with institutional memory. It knows about the WAL mode pattern. It knows about the known concurrency bugs. It knows the architectural decision to use per-request connections. All from past sessions that the user has long forgotten.
+        </p>
+
+        <h2>The deploy problem, solved</h2>
+
+        <p>
+            Let's replay the deploy scenario with Nora's pre-hook active.
+        </p>
+
+        <div class="comparison">
+            <div class="comparison-box before">
+                <h4>Without Nora</h4>
+                <div class="step">1. Try firebase deploy (no auth) ✗</div>
+                <div class="step">2. Extract OAuth token ✗</div>
+                <div class="step">3. Monkey-patch fetch ✗</div>
+                <div class="step">4. ClipboardEvent paste ✗</div>
+                <div class="step">5. Synthetic keyboard events ✗</div>
+                <div class="step">6. Read transcript manually ✓</div>
+                <p style="margin-top: 12px; color: #f87171; font-weight: 600;">~20 minutes, 6 attempts</p>
+            </div>
+            <div class="comparison-box after">
+                <h4>With Nora</h4>
+                <div class="step">1. User types "deploy to Firebase"</div>
+                <div class="step">2. Pre-hook fires, searches DB</div>
+                <div class="step">3. Finds: "computer tool type action works with Cloud Shell xterm.js"</div>
+                <div class="step">4. Claude types command in Cloud Shell ✓</div>
+                <p style="margin-top: 12px; color: var(--color-teal); font-weight: 600;">~30 seconds, first attempt</p>
+            </div>
+        </div>
+
+        <p>
+            The difference isn't intelligence. Claude is the same model either way. The difference is memory. One version starts from zero. The other starts from everything you've ever done.
+        </p>
+
+        <h2>How to set it up</h2>
+
+        <p>
+            The hook registration lives in <code>.claude/settings.json</code>:
+        </p>
+
+        <pre>{
+  "<span class="keyword">hooks</span>": {
+    "<span class="string">UserPromptSubmit</span>": [
+      {
+        "<span class="keyword">matcher</span>": "",
+        "<span class="keyword">hooks</span>": [
+          {
+            "<span class="keyword">type</span>": "command",
+            "<span class="keyword">command</span>": "python3 ~/.claude/hooks/nora_context.py",
+            "<span class="keyword">timeout</span>": 3
+          }
+        ]
+      }
+    ],
+    "<span class="string">Stop</span>": [
+      {
+        "<span class="keyword">matcher</span>": "",
+        "<span class="keyword">hooks</span>": [
+          {
+            "<span class="keyword">type</span>": "command",
+            "<span class="keyword">command</span>": "python3 ~/.claude/hooks/kernora_hook.py",
+            "<span class="keyword">async</span>": true
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+
+        <p>
+            Two hooks. <code>UserPromptSubmit</code> fires before every prompt — Nora searches and injects context. <code>Stop</code> fires after every session — Nora captures the transcript for future searches. The capture is async so it never slows down your workflow.
+        </p>
+
+        <p>
+            Or just install Kernora and it registers both automatically:
+        </p>
+
+        <pre>curl -fsSL https://kernora.ai/install | bash</pre>
+
+        <h2>Why this matters beyond deployment scripts</h2>
+
+        <p>
+            The deploy story is a clean example, but the real value compounds over weeks and months. Consider what Nora remembers:
+        </p>
+
+        <p>
+            <strong>Patterns with effectiveness scores.</strong> "Profile isolation with ProfileManager.getActiveProfileId()" scored 0.98 effectiveness across our sessions — it's the most reliable pattern in the codebase. When anyone on the team asks about profile management, Nora surfaces that pattern first.
+        </p>
+
+        <p>
+            <strong>Bugs that keep coming back.</strong> "SQLite locked on concurrent writes" has been reported three times across different sessions. Nora flags it every time someone touches the database layer. The bug doesn't get rediscovered — it gets addressed.
+        </p>
+
+        <p>
+            <strong>Decisions with rationale.</strong> Six months from now, when someone asks "why don't we use Firestore?", Nora surfaces the original decision: "Privacy-first architecture, no cloud dependency." The reasoning doesn't get lost when people rotate.
+        </p>
+
+        <p>
+            <strong>Anti-patterns from real failures.</strong> "Started building before reading existing code" was extracted from a session where we wasted two hours reimplementing something that already existed. Nora warns the next session before it repeats the mistake.
+        </p>
+
+        <h2>The architecture in 30 seconds</h2>
+
+        <div class="callout">
+            <strong>Session ends</strong> → <code>hook.py</code> captures transcript → sends to Nora daemon via Unix socket → daemon stores in SQLite → analyzer extracts patterns, bugs, decisions (two-phase: deterministic + LLM) → stored in <code>echo.db</code><br><br>
+            <strong>Next session starts</strong> → user types prompt → <code>nora_context.py</code> extracts keywords → searches <code>echo.db</code> → prints matching context to stdout → Claude sees it before responding
+        </div>
+
+        <p>
+            Everything is local. The database is a SQLite file at <code>~/.kernora/echo.db</code>. The LLM analysis uses your own API key via LiteLLM — Anthropic, Google, OpenAI, Bedrock, or Ollama. Kernora never sees your code, your sessions, or your API key.
+        </p>
+
+        <h2>What I learned building this today</h2>
+
+        <p>
+            The pre-hook is 180 lines of Python. It took less than an hour to write, test, and ship. The hard part wasn't the code — it was recognizing the gap.
+        </p>
+
+        <p>
+            Nora had been capturing sessions for days. Six sessions, 16 patterns, 11 bugs, 7 decisions — all sitting in a SQLite database. The data was there. The query engine was there. What was missing was the trigger: the automatic, invisible moment where the system says "I know something relevant" before anyone asks.
+        </p>
+
+        <p>
+            That's the difference between a search engine and a memory. A search engine waits for you to ask. A memory volunteers what you need before you know you need it.
+        </p>
+
+        <p>
+            Nora is the memory.
+        </p>
+
+        <div class="cta-box">
+            <h3>Give your AI sessions a memory</h3>
+            <p>Local. Private. Automatic. Works with Claude Code, Kiro, Cursor, and VS Code agents.</p>
+            <div class="cta-install">curl -fsSL https://kernora.ai/install | bash</div>
+        </div>
+    </article>
+</body>
+</html>

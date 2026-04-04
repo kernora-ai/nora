@@ -1,0 +1,31 @@
+__pycache__/
+*.pyc
+.env
+*.log
+.DS_Store
+
+# Node / VS Code extension build artifacts
+node_modules/
+*.vsix
+kiro-extension/out/
+kiro-extension/.vscode-test/
+kernora-marketplace/node_modules/
+kernora-chrome/node_modules/
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# CDK
+cloud_backend/cdk.out/
+cloud_backend/.cdk.staging/
+
+# Local runtime
+*.sock
+*.pid
+
+# Swift build artifacts
+kernora-native-mac/.build/

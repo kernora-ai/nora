@@ -1,0 +1,9 @@
+.vscode/**
+src/**
+node_modules/**
+*.ts
+!out/extension.js
+tsconfig.json
+package-lock.json
+*.vsix
+skills/kernora-rebuild/kernora-rebuild/**

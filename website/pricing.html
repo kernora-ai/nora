@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernora — Pricing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #07090d;
+            color: #e0e6ed;
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background-color: rgba(7, 9, 13, 0.95);
+            border-bottom: 1px solid rgba(29, 158, 117, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1D9E75;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+            align-items: center;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: #b0b8c3;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: #1D9E75;
+        }
+
+        .nav-links a.active {
+            color: #1D9E75;
+        }
+
+        .nav-cta {
+            background: linear-gradient(135deg, #1D9E75, #378ADD);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        .nav-cta:hover {
+            opacity: 0.9;
+        }
+
+        /* Main Container */
+        .container {
+            margin-top: 70px;
+            padding: 80px 40px;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Header */
+        .page-header {
+            margin-bottom: 80px;
+            text-align: center;
+        }
+
+        .page-header h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .page-header p {
+            font-size: 18px;
+            color: #b0b8c3;
+        }
+
+        /* Pricing Grid */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 30px;
+            margin-bottom: 80px;
+        }
+
+        .pricing-card {
+            background-color: rgba(29, 158, 117, 0.03);
+            border: 1px solid rgba(29, 158, 117, 0.1);
+            border-radius: 12px;
+            padding: 40px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .pricing-card.featured {
+            border-color: #1D9E75;
+            background: linear-gradient(135deg, rgba(29, 158, 117, 0.08), rgba(55, 138, 221, 0.04));
+            transform: scale(1.02);
+            box-shadow: 0 20px 60px rgba(29, 158, 117, 0.15);
+        }
+
+        .pricing-card.coming-soon {
+            opacity: 0.7;
+            position: relative;
+        }
+
+        .pricing-card.coming-soon::after {
+            content: 'Coming Soon';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(7, 9, 13, 0.8);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            color: #1D9E75;
+            z-index: 10;
+            backdrop-filter: blur(2px);
+        }
+
+        .pricing-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #1D9E75, #378ADD);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pricing-card h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+
+        .pricing-price {
+            font-size: 48px;
+            font-weight: 700;
+            color: #1D9E75;
+            margin-bottom: 5px;
+        }
+
+        .pricing-period {
+            font-size: 14px;
+            color: #707d8f;
+            margin-bottom: 30px;
+        }
+
+        .pricing-description {
+            font-size: 14px;
+            color: #b0b8c3;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .pricing-features {
+            list-style: none;
+            margin-bottom: 40px;
+            flex: 1;
+        }
+
+        .pricing-features li {
+            padding: 12px 0;
+            color: #b0b8c3;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(29, 158, 117, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pricing-features li::before {
+            content: '✓';
+            color: #1D9E75;
+            font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .pricing-cta {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .pricing-cta.primary {
+            background: linear-gradient(135deg, #1D9E75, #378ADD);
+            color: white;
+        }
+
+        .pricing-cta.primary:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .pricing-cta.secondary {
+            background-color: transparent;
+            color: #1D9E75;
+            border: 2px solid #1D9E75;
+        }
+
+        .pricing-cta.secondary:hover {
+            background-color: rgba(29, 158, 117, 0.1);
+        }
+
+        .pricing-cta.disabled {
+            background-color: rgba(29, 158, 117, 0.2);
+            color: #707d8f;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* FAQ Section */
+        .faq-section {
+            margin-top: 100px;
+            padding-top: 80px;
+            border-top: 1px solid rgba(29, 158, 117, 0.1);
+        }
+
+        .faq-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .faq-header h2 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .faq-header p {
+            font-size: 16px;
+            color: #b0b8c3;
+        }
+
+        .faq-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+        }
+
+        .faq-item {
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(29, 158, 117, 0.1);
+        }
+
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+
+        .faq-question {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .faq-toggle {
+            color: #1D9E75;
+            font-size: 20px;
+            transition: transform 0.2s;
+        }
+
+        .faq-question:hover {
+            color: #1D9E75;
+        }
+
+        .faq-answer {
+            font-size: 14px;
+            color: #b0b8c3;
+            line-height: 1.6;
+            max-height: 200px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .faq-answer.hidden {
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                padding: 0 20px;
+            }
+
+            .nav-links {
+                gap: 20px;
+            }
+
+            .nav-links a {
+                font-size: 13px;
+            }
+
+            .container {
+                padding: 40px 20px;
+            }
+
+            .page-header h1 {
+                font-size: 32px;
+            }
+
+            .pricing-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .pricing-card.featured {
+                transform: scale(1);
+            }
+
+            .faq-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .pricing-card {
+                padding: 30px;
+            }
+
+            .pricing-price {
+                font-size: 36px;
+            }
+        }
+
+        /* Footer */
+        footer {
+            background-color: rgba(29, 158, 117, 0.03);
+            border-top: 1px solid rgba(29, 158, 117, 0.1);
+            padding: 40px;
+            text-align: center;
+            color: #707d8f;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-logo">◎ kernora</div>
+        <ul class="nav-links">
+            <li><a href="/">Features</a></li>
+            <li><a href="/docs.html">Docs</a></li>
+            <li><a href="/blog.html">Blog</a></li>
+            <li><a href="/pricing.html" class="active">Pricing</a></li>
+            <li><a href="https://github.com/kernora-ai/nora" target="_blank">GitHub</a></li>
+            <li><a href="#install" class="nav-cta">Install</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>Pricing</h1>
+            <p>Simple, transparent pricing for every engineer.</p>
+        </div>
+
+        <!-- Pricing Cards -->
+        <div class="pricing-grid">
+            <!-- BYOK (Free) -->
+            <div class="pricing-card featured">
+                <h3>BYOK</h3>
+                <div class="pricing-price">$0</div>
+                <div class="pricing-period">/forever</div>
+                <div class="pricing-description">Everything runs on your machine, forever free.</div>
+                <ul class="pricing-features">
+                    <li>Everything runs locally</li>
+                    <li>Your API keys, your machine</li>
+                    <li>SQLite storage</li>
+                    <li>All CLI commands</li>
+                    <li>Dashboard at localhost</li>
+                    <li>iCloud/Dropbox backup</li>
+                    <li>Community support</li>
+                </ul>
+                <button class="pricing-cta primary">Install Free</button>
+                <div class="pricing-badge">Most Popular</div>
+            </div>
+
+            <!-- Team -->
+            <div class="pricing-card coming-soon">
+                <h3>Team</h3>
+                <div class="pricing-price">$12</div>
+                <div class="pricing-period">/engineer/month</div>
+                <div class="pricing-description">Shared knowledge for engineering teams.</div>
+                <ul class="pricing-features">
+                    <li>Everything in BYOK</li>
+                    <li>S3 shared knowledge sync</li>
+                    <li>Team pattern library</li>
+                    <li>Cross-session search</li>
+                    <li>Decision impact tracking</li>
+                    <li>Sprint rollups per engineer</li>
+                    <li>Priority support</li>
+                </ul>
+                <button class="pricing-cta disabled">Coming Soon</button>
+            </div>
+
+            <!-- Enterprise -->
+            <div class="pricing-card">
+                <h3>Enterprise</h3>
+                <div class="pricing-price">Custom</div>
+                <div class="pricing-period">contact sales</div>
+                <div class="pricing-description">Dedicated support and custom deployment.</div>
+                <ul class="pricing-features">
+                    <li>Everything in Team</li>
+                    <li>SSO / SAML</li>
+                    <li>Audit logging</li>
+                    <li>Custom LLM routing</li>
+                    <li>On-prem deployment</li>
+                    <li>Dedicated support</li>
+                    <li>SLA guarantee</li>
+                </ul>
+                <button class="pricing-cta secondary">Contact Sales</button>
+            </div>
+        </div>
+
+        <!-- FAQ Section -->
+        <div class="faq-section">
+            <div class="faq-header">
+                <h2>Frequently Asked Questions</h2>
+                <p>Everything you need to know about Kernora pricing and features.</p>
+            </div>
+
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        <span>Is BYOK really free forever?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer hidden">
+                        <p>Yes. BYOK runs entirely on your machine with your own API keys. We never see your data, never charge you, and never will. The free tier is permanent.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        <span>What does my API key cost?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer hidden">
+                        <p>Kernora uses approximately $0.02–0.05 in API credits per session analysis. A typical month of engineering work costs $2–5 in API fees to your provider (Anthropic, OpenAI, Google, etc.). You control exactly which provider powers your analysis.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        <span>Can I switch from BYOK to Team later?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer hidden">
+                        <p>Yes. Your local knowledge base at <code>~/.kernora</code> migrates to the shared S3 bucket. Nothing is lost. When Team launches, upgrading will be a one-command migration.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        <span>What about Ollama (fully local)?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer hidden">
+                        <p>Fully supported. Run Ollama on your machine, point Kernora to it, and pay zero API costs. Analysis quality is slightly lower than Claude or GPT-4, but it's a great way to try Kernora risk-free while keeping your data entirely offline.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        <span>Do you store my sessions?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer hidden">
+                        <p>No. BYOK stores everything locally in your <code>~/.kernora</code> directory. Team mode stores knowledge in your own S3 bucket. We never access, log, or store your session transcripts on our servers.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        <span>What LLMs does Kernora support?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer hidden">
+                        <p>Kernora works with Claude (Anthropic), GPT-4 (OpenAI), Gemini (Google), and Ollama (local). The installer detects your available API keys and recommends the best choice. You can switch anytime.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>Built for engineers who believe their judgment matters. © 2026 Kernora</p>
+    </footer>
+
+    <script>
+        function toggleFAQ(element) {
+            const answer = element.parentElement.querySelector('.faq-answer');
+            const toggle = element.querySelector('.faq-toggle');
+
+            // Close all other FAQs
+            document.querySelectorAll('.faq-answer').forEach(item => {
+                if (item !== answer) {
+                    item.classList.add('hidden');
+                    item.parentElement.querySelector('.faq-toggle').textContent = '+';
+                }
+            });
+
+            // Toggle current FAQ
+            answer.classList.toggle('hidden');
+            toggle.textContent = answer.classList.contains('hidden') ? '+' : '−';
+        }
+    </script>
+</body>
+</html>

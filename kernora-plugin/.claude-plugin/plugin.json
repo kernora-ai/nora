@@ -1,0 +1,14 @@
+{
+  "name": "kernora",
+  "description": "AI work intelligence for your coding sessions. Captures patterns, surfaces bugs, coaches prompt quality in real time — locally, with your own API key. Zero data leaves your machine in BYOK mode.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Mihir Choudhary",
+    "email": "hello@kernora.ai",
+    "url": "https://kernora.ai"
+  },
+  "homepage": "https://kernora.ai",
+  "repository": "https://github.com/kernora/kernora",
+  "license": "Elastic-2.0",
+  "keywords": ["work-intelligence", "sessions", "patterns", "byok", "privacy", "analytics"]
+}

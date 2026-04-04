@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Intelligence Dashboard — Nora</title>
+    <style>
+        :root {
+            --color-base: #07090d;
+            --color-surface: #0f1419;
+            --color-surface-light: #1a1f28;
+            --color-border: #2a2f38;
+            --color-text-primary: #f5f5f5;
+            --color-text-secondary: #a0a0a0;
+            --color-text-tertiary: #707070;
+            --color-teal: #1D9E75;
+            --color-teal-dim: rgba(29, 158, 117, 0.1);
+            --color-teal-dark: #0d5c43;
+            --color-blue: #378ADD;
+            --color-blue-dim: rgba(55, 138, 221, 0.1);
+            --color-red: #E74C3C;
+            --color-red-dim: rgba(231, 76, 60, 0.1);
+            --color-yellow: #F39C12;
+            --color-yellow-dim: rgba(243, 156, 18, 0.1);
+            --color-green: #27AE60;
+            --color-green-dim: rgba(39, 174, 96, 0.1);
+            --space-xs: 0.5rem;
+            --space-sm: 0.75rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--color-base);
+            color: var(--color-text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Inter, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        /* Navigation */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: rgba(7, 9, 13, 0.95);
+            backdrop-filter: blur(4px);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--space-lg) var(--space-xl);
+        }
+
+        .nav-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-weight: 600;
+            font-size: 18px;
+            color: var(--color-text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .nav-brand::before {
+            content: '◆';
+            color: var(--color-teal);
+            font-size: 24px;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: var(--space-xl);
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--color-text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--color-text-primary);
+        }
+
+        .nav-cta {
+            background-color: var(--color-teal);
+            color: var(--color-base);
+            padding: var(--space-sm) var(--space-lg);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 14px;
+            transition: background-color 0.2s ease;
+        }
+
+        .nav-cta:hover {
+            background-color: var(--color-teal-dark);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: var(--space-2xl) var(--space-xl);
+        }
+
+        /* Header Section */
+        .header {
+            margin-bottom: var(--space-2xl);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-lg);
+        }
+
+        .header-title h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-sm);
+        }
+
+        .header-title p {
+            color: var(--color-text-secondary);
+            font-size: 14px;
+        }
+
+        .role-selector {
+            display: flex;
+            gap: var(--space-sm);
+            background-color: var(--color-surface-light);
+            padding: var(--space-sm);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+        }
+
+        .role-selector button {
+            padding: var(--space-sm) var(--space-md);
+            border: none;
+            background-color: transparent;
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .role-selector button.active {
+            background-color: var(--color-teal);
+            color: var(--color-base);
+        }
+
+        .role-selector button:hover:not(.active) {
+            background-color: var(--color-surface);
+            color: var(--color-text-primary);
+        }
+
+        /* Overview Cards */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-2xl);
+        }
+
+        .overview-card {
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .overview-card-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--color-text-tertiary);
+        }
+
+        .overview-card-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+        }
+
+        .overview-card-delta {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .overview-card-delta.positive {
+            color: var(--color-green);
+        }
+
+        .overview-card-delta.negative {
+            color: var(--color-red);
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .section-title .icon {
+            width: 20px;
+            height: 20px;
+            background-color: var(--color-teal-dim);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-teal);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        /* Table */
+        .table-container {
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: var(--space-2xl);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background-color: var(--color-surface-light);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        th {
+            padding: var(--space-md) var(--space-lg);
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--color-text-tertiary);
+            user-select: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        th:hover {
+            background-color: var(--color-border);
+        }
+
+        th.sortable::after {
+            content: ' ↕';
+            opacity: 0.4;
+        }
+
+        th.sorted.asc::after {
+            content: ' ↑';
+            opacity: 1;
+            color: var(--color-teal);
+        }
+
+        th.sorted.desc::after {
+            content: ' ↓';
+            opacity: 1;
+            color: var(--color-teal);
+        }
+
+        tbody tr {
+            border-bottom: 1px solid var(--color-border);
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+
+        tbody tr:hover {
+            background-color: var(--color-surface-light);
+        }
+
+        tbody tr.expanded {
+            background-color: var(--color-surface-light);
+        }
+
+        td {
+            padding: var(--space-lg);
+            font-size: 14px;
+            color: var(--color-text-primary);
+        }
+
+        .team-name {
+            font-weight: 600;
+            color: var(--color-teal);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .team-name::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background-color: var(--color-teal);
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .metric-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-sm);
+            background-color: var(--color-surface-light);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .kiq-score {
+            font-weight: 700;
+        }
+
+        .kiq-score.excellent {
+            color: var(--color-green);
+        }
+
+        .kiq-score.good {
+            color: var(--color-teal);
+        }
+
+        .kiq-score.fair {
+            color: var(--color-yellow);
+        }
+
+        .kiq-score.needs-attention {
+            color: var(--color-red);
+        }
+
+        .delta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .delta-badge.positive {
+            color: var(--color-green);
+        }
+
+        .delta-badge.negative {
+            color: var(--color-red);
+        }
+
+        .delta-badge.neutral {
+            color: var(--color-text-secondary);
+        }
+
+        /* Team Details Row */
+        .team-details-row {
+            display: none;
+        }
+
+        .team-details-row.show {
+            display: table-row;
+        }
+
+        .team-details-row td {
+            padding: var(--space-lg) var(--space-xl);
+            background-color: var(--color-surface-light);
+        }
+
+        .team-details-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-xl);
+        }
+
+        .details-section h4 {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--color-text-tertiary);
+            margin-bottom: var(--space-md);
+        }
+
+        .details-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .details-list li {
+            padding: var(--space-md);
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+        }
+
+        .member-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            color: var(--color-text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .member-role {
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+        }
+
+        .sparkline {
+            width: 60px;
+            height: 20px;
+        }
+
+        .pattern-item,
+        .bug-item,
+        .decision-item {
+            padding: var(--space-md);
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+        }
+
+        .pattern-title,
+        .bug-title,
+        .decision-title {
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-xs);
+        }
+
+        .pattern-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+
+        .effectiveness {
+            color: var(--color-teal);
+            font-weight: 600;
+        }
+
+        .bug-severity {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .bug-severity.critical {
+            background-color: var(--color-red-dim);
+            color: var(--color-red);
+        }
+
+        .bug-severity.high {
+            background-color: var(--color-yellow-dim);
+            color: var(--color-yellow);
+        }
+
+        .bug-severity.medium {
+            background-color: var(--color-blue-dim);
+            color: var(--color-blue);
+        }
+
+        .decision-rationale {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            margin-top: var(--space-xs);
+        }
+
+        /* Insights Section */
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-2xl);
+        }
+
+        .insight-card {
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+        }
+
+        .insight-card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .insight-card .icon {
+            width: 24px;
+            height: 24px;
+            background-color: var(--color-teal-dim);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-teal);
+            font-weight: 700;
+        }
+
+        .insight-items {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .insight-item {
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .insight-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .insight-item-title {
+            font-weight: 600;
+            color: var(--color-text-primary);
+            font-size: 13px;
+            margin-bottom: var(--space-xs);
+        }
+
+        .insight-item-meta {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .insight-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-sm);
+            background-color: var(--color-teal-dim);
+            border-radius: var(--radius-sm);
+            color: var(--color-teal);
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        /* Footer Note */
+        .footer-note {
+            background-color: var(--color-surface-light);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-top: var(--space-2xl);
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-md);
+        }
+
+        .footer-note::before {
+            content: 'ℹ';
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            background-color: var(--color-blue-dim);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-blue);
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .footer-note code {
+            background-color: var(--color-surface);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--color-teal);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                gap: var(--space-lg);
+            }
+
+            .header-top {
+                flex-direction: column;
+                gap: var(--space-lg);
+            }
+
+            .role-selector {
+                flex-wrap: wrap;
+            }
+
+            .overview-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            th, td {
+                padding: var(--space-md);
+                font-size: 12px;
+            }
+
+            .team-details-content {
+                grid-template-columns: 1fr;
+            }
+
+            .insights-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-title h1 {
+                font-size: 24px;
+            }
+        }
+
+        /* Hidden elements */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <a href="/" class="nav-brand">Nora</a>
+            <ul class="nav-links">
+                <li><a href="/docs">Docs</a></li>
+                <li><a href="/blog">Blog</a></li>
+                <li><a href="/pricing">Pricing</a></li>
+                <li><a href="https://github.com/getkernel/nora" target="_blank">GitHub</a></li>
+                <li><a href="/#install" class="nav-cta">Install</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1>Team Intelligence Dashboard</h1>
+                    <p>Knowledge metrics and patterns across your organization</p>
+                </div>
+                <div class="role-selector">
+                    <button class="role-btn active" data-role="manager">Manager</button>
+                    <button class="role-btn" data-role="director">Director</button>
+                    <button class="role-btn" data-role="vp">VP</button>
+                    <button class="role-btn" data-role="ceo">CEO</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview Cards -->
+        <div class="overview-grid">
+            <div class="overview-card">
+                <div class="overview-card-label">Teams</div>
+                <div class="overview-card-value">4</div>
+                <div class="overview-card-delta neutral">Active teams</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-card-label">Team Members</div>
+                <div class="overview-card-value">23</div>
+                <div class="overview-card-delta positive">+2 this month</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-card-label">Avg Knowledge IQ</div>
+                <div class="overview-card-value">74</div>
+                <div class="overview-card-delta positive">+1.8 this week</div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-card-label">Knowledge Velocity</div>
+                <div class="overview-card-value">+12%</div>
+                <div class="overview-card-delta positive">Decisions & patterns/week</div>
+            </div>
+        </div>
+
+        <!-- Team Comparison Table -->
+        <div class="section-title">
+            <span class="icon">👥</span>
+            Team Comparison
+        </div>
+        <div class="table-container">
+            <table id="teamsTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-column="name">Team Name</th>
+                        <th class="sortable" data-column="members">Members</th>
+                        <th class="sortable" data-column="avg_kiq">Avg KIQ</th>
+                        <th class="sortable" data-column="patterns_week">Patterns/Week</th>
+                        <th class="sortable" data-column="bugs_open">Bugs Open</th>
+                        <th class="sortable" data-column="decisions_week">Decisions/Week</th>
+                    </tr>
+                </thead>
+                <tbody id="teamsTableBody">
+                    <!-- Populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Insights Section (shown for Director+) -->
+        <div id="insightsSection">
+            <div class="section-title">
+                <span class="icon">💡</span>
+                Organizational Insights
+            </div>
+            <div class="insights-grid">
+                <div class="insight-card">
+                    <h3>
+                        <span class="icon">⭐</span>
+                        Top Patterns Org-Wide
+                    </h3>
+                    <div class="insight-items" id="topPatterns">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <h3>
+                        <span class="icon">🔗</span>
+                        Cross-Team Bug Patterns
+                    </h3>
+                    <div class="insight-items" id="crossTeamBugs">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <h3>
+                        <span class="icon">⚠️</span>
+                        Knowledge Gaps
+                    </h3>
+                    <div class="insight-items" id="knowledgeGaps">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Note -->
+        <div class="footer-note">
+            This dashboard reads from your team's S3 sync bucket. Configure data source in <code>~/.kernora/config.toml</code>. <a href="/docs#dashboard" style="color: var(--color-teal); text-decoration: none;">Learn more →</a>
+        </div>
+    </div>
+
+    <script>
+        // Mock data
+        const MOCK_DATA = {
+            org: "Acme Corp",
+            teams: [
+                {
+                    id: "platform",
+                    name: "Platform",
+                    members: 5,
+                    avg_kiq: 78,
+                    kiq_delta: 3,
+                    patterns_week: 12,
+                    bugs_open: 3,
+                    decisions_week: 8,
+                    member_list: [
+                        { name: "Mihir C.", kiq: 91, role: "ic", trend: [85, 87, 88, 90, 91] },
+                        { name: "Priya S.", kiq: 82, role: "ic", trend: [78, 79, 80, 81, 82] },
+                        { name: "Alex K.", kiq: 74, role: "ic", trend: [70, 71, 72, 73, 74] },
+                        { name: "Jordan W.", kiq: 68, role: "ic", trend: [65, 66, 67, 68, 68] },
+                        { name: "Sam R.", kiq: 75, role: "manager", trend: [72, 73, 74, 74, 75] }
+                    ],
+                    top_patterns: [
+                        { pattern: "Error boundary with retry logic", effectiveness: 0.92, domain: "React" },
+                        { pattern: "Circuit breaker for API calls", effectiveness: 0.88, domain: "Backend" },
+                        { pattern: "CoreData batch insert optimization", effectiveness: 0.85, domain: "iOS" }
+                    ],
+                    top_bugs: [
+                        { title: "Memory leak in WebSocket handler", severity: "high", times_seen: 7 },
+                        { title: "Race condition in cache invalidation", severity: "medium", times_seen: 4 }
+                    ],
+                    recent_decisions: [
+                        { decision: "Migrate from REST to gRPC for internal services", rationale: "50% latency reduction" },
+                        { decision: "Use SQLite instead of Postgres for edge caching", rationale: "Zero-ops, embedded" }
+                    ]
+                },
+                {
+                    id: "mobile",
+                    name: "Mobile",
+                    members: 6,
+                    avg_kiq: 71,
+                    kiq_delta: -1,
+                    patterns_week: 8,
+                    bugs_open: 7,
+                    decisions_week: 5,
+                    member_list: [
+                        { name: "Ravi M.", kiq: 79, role: "ic", trend: [75, 76, 77, 78, 79] },
+                        { name: "Lisa T.", kiq: 75, role: "ic", trend: [73, 74, 75, 75, 75] },
+                        { name: "Chen W.", kiq: 71, role: "ic", trend: [68, 69, 70, 71, 71] },
+                        { name: "Maria G.", kiq: 68, role: "ic", trend: [66, 67, 67, 68, 68] },
+                        { name: "Dave P.", kiq: 65, role: "ic", trend: [62, 63, 64, 65, 65] },
+                        { name: "Anika R.", kiq: 68, role: "manager", trend: [65, 66, 67, 67, 68] }
+                    ],
+                    top_patterns: [
+                        { pattern: "SwiftUI state machine for multi-step flows", effectiveness: 0.90, domain: "iOS" },
+                        { pattern: "Offline-first sync with conflict resolution", effectiveness: 0.87, domain: "Architecture" }
+                    ],
+                    top_bugs: [
+                        { title: "App crash on background CoreData access", severity: "critical", times_seen: 12 },
+                        { title: "Image cache not respecting memory warnings", severity: "high", times_seen: 5 }
+                    ],
+                    recent_decisions: [
+                        { decision: "Adopt SwiftUI over UIKit for all new screens", rationale: "Faster iteration, native previews" }
+                    ]
+                },
+                {
+                    id: "infra",
+                    name: "Infra",
+                    members: 4,
+                    avg_kiq: 82,
+                    kiq_delta: 5,
+                    patterns_week: 15,
+                    bugs_open: 1,
+                    decisions_week: 11,
+                    member_list: [
+                        { name: "Omar F.", kiq: 88, role: "ic", trend: [82, 84, 85, 87, 88] },
+                        { name: "Tanya B.", kiq: 84, role: "ic", trend: [80, 81, 82, 83, 84] },
+                        { name: "Raj P.", kiq: 79, role: "ic", trend: [75, 76, 77, 78, 79] },
+                        { name: "Nina S.", kiq: 77, role: "manager", trend: [73, 74, 75, 76, 77] }
+                    ],
+                    top_patterns: [
+                        { pattern: "Terraform module composition for multi-env", effectiveness: 0.94, domain: "DevOps" },
+                        { pattern: "Zero-downtime blue-green with canary", effectiveness: 0.91, domain: "Deployment" }
+                    ],
+                    top_bugs: [
+                        { title: "DNS propagation delay in failover", severity: "medium", times_seen: 3 }
+                    ],
+                    recent_decisions: [
+                        { decision: "Move from EKS to Fly.io for non-critical services", rationale: "80% cost reduction" }
+                    ]
+                },
+                {
+                    id: "frontend",
+                    name: "Frontend",
+                    members: 8,
+                    avg_kiq: 65,
+                    kiq_delta: 2,
+                    patterns_week: 6,
+                    bugs_open: 9,
+                    decisions_week: 4,
+                    member_list: [
+                        { name: "Sophie L.", kiq: 73, role: "ic", trend: [69, 70, 71, 72, 73] },
+                        { name: "Jake M.", kiq: 70, role: "ic", trend: [67, 68, 69, 69, 70] },
+                        { name: "Kenji T.", kiq: 68, role: "ic", trend: [65, 66, 67, 67, 68] },
+                        { name: "Ana V.", kiq: 66, role: "ic", trend: [63, 64, 65, 65, 66] },
+                        { name: "Pedro C.", kiq: 63, role: "ic", trend: [60, 61, 62, 62, 63] },
+                        { name: "Luna K.", kiq: 61, role: "ic", trend: [58, 59, 60, 60, 61] },
+                        { name: "Ben H.", kiq: 60, role: "ic", trend: [57, 58, 59, 59, 60] },
+                        { name: "Yuki A.", kiq: 59, role: "manager", trend: [56, 57, 58, 58, 59] }
+                    ],
+                    top_patterns: [
+                        { pattern: "React Server Components for data-heavy pages", effectiveness: 0.83, domain: "React" },
+                        { pattern: "Tailwind design token system", effectiveness: 0.80, domain: "CSS" }
+                    ],
+                    top_bugs: [
+                        { title: "Hydration mismatch with dynamic imports", severity: "high", times_seen: 8 },
+                        { title: "Layout shift on lazy-loaded images", severity: "medium", times_seen: 6 }
+                    ],
+                    recent_decisions: [
+                        { decision: "Adopt Playwright over Cypress for E2E tests", rationale: "Multi-browser, faster execution" }
+                    ]
+                }
+            ]
+        };
+
+        // State
+        let currentRole = 'manager';
+        let currentSort = { column: 'name', direction: 'asc' };
+        let expandedTeams = new Set();
+
+        // Utility: Create sparkline SVG
+        function createSparkline(data) {
+            const width = 60, height = 20;
+            const padding = 2;
+            const plotWidth = width - (padding * 2);
+            const plotHeight = height - (padding * 2);
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+
+            const points = data.map((val, i) => {
+                const x = padding + (i / (data.length - 1)) * plotWidth;
+                const y = padding + plotHeight - ((val - min) / range) * plotHeight;
+                return `${x},${y}`;
+            }).join(' ');
+
+            return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="${points}" fill="none" stroke="#1D9E75" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+                <circle cx="${padding + plotWidth}" cy="${padding + plotHeight - ((data[data.length-1] - min) / range) * plotHeight}" r="1.5" fill="#1D9E75"/>
+            </svg>`;
+        }
+
+        // Utility: KIQ score color
+        function getKiqClass(score) {
+            if (score >= 80) return 'excellent';
+            if (score >= 70) return 'good';
+            if (score >= 60) return 'fair';
+            return 'needs-attention';
+        }
+
+        // Utility: Delta formatting
+        function formatDelta(value) {
+            if (value > 0) return `<span class="delta-badge positive">↑ +${value}</span>`;
+            if (value < 0) return `<span class="delta-badge negative">↓ ${value}</span>`;
+            return `<span class="delta-badge neutral">—</span>`;
+        }
+
+        // Populate team table
+        function renderTeamTable() {
+            const tbody = document.getElementById('teamsTableBody');
+            tbody.innerHTML = '';
+
+            let teams = MOCK_DATA.teams;
+
+            // Filter by role (managers only see their own team)
+            if (currentRole === 'manager') {
+                // Show only the first team (Platform) as "own team"
+                teams = [teams[0]];
+            }
+
+            // Sort
+            teams = [...teams].sort((a, b) => {
+                const aVal = a[currentSort.column];
+                const bVal = b[currentSort.column];
+                const direction = currentSort.direction === 'asc' ? 1 : -1;
+                if (typeof aVal === 'string') {
+                    return aVal.localeCompare(bVal) * direction;
+                }
+                return (aVal - bVal) * direction;
+            });
+
+            teams.forEach(team => {
+                const isExpanded = expandedTeams.has(team.id);
+
+                // Main row
+                const row = document.createElement('tr');
+                row.dataset.teamId = team.id;
+                row.className = isExpanded ? 'expanded' : '';
+                row.innerHTML = `
+                    <td><div class="team-name">${team.name}</div></td>
+                    <td><span class="metric-badge">${team.members} members</span></td>
+                    <td><span class="kiq-score ${getKiqClass(team.avg_kiq)}">${team.avg_kiq}</span> ${formatDelta(team.kiq_delta)}</td>
+                    <td><strong>${team.patterns_week}</strong></td>
+                    <td><strong>${team.bugs_open}</strong></td>
+                    <td><strong>${team.decisions_week}</strong></td>
+                `;
+                row.addEventListener('click', () => toggleTeamDetails(team.id));
+                tbody.appendChild(row);
+
+                // Details row
+                if (isExpanded) {
+                    const detailsRow = document.createElement('tr');
+                    detailsRow.className = 'team-details-row show';
+                    detailsRow.innerHTML = `
+                        <td colspan="6">
+                            <div class="team-details-content">
+                                <!-- Members -->
+                                <div class="details-section">
+                                    <h4>Team Members</h4>
+                                    <ul class="details-list">
+                                        ${team.member_list.map(m => `
+                                            <li class="member-item">
+                                                <div class="member-info">
+                                                    <div class="member-name">
+                                                        ${m.name}
+                                                        <span style="font-size: 10px; color: var(--color-text-tertiary);">${m.role === 'manager' ? '👤' : ''}</span>
+                                                    </div>
+                                                    <div class="member-role">KIQ: <strong class="${getKiqClass(m.kiq)}">${m.kiq}</strong></div>
+                                                </div>
+                                                <div>${createSparkline(m.trend)}</div>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+
+                                <!-- Patterns -->
+                                <div class="details-section">
+                                    <h4>Top Patterns</h4>
+                                    <ul class="details-list">
+                                        ${team.top_patterns.map(p => `
+                                            <li class="pattern-item">
+                                                <div class="pattern-title">${p.pattern}</div>
+                                                <div class="pattern-meta">
+                                                    <span class="effectiveness">${Math.round(p.effectiveness * 100)}% effective</span>
+                                                    <span>${p.domain}</span>
+                                                </div>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+
+                                <!-- Bugs & Decisions -->
+                                <div class="details-section">
+                                    <h4>Open Issues</h4>
+                                    <ul class="details-list">
+                                        ${team.top_bugs.map(b => `
+                                            <li class="bug-item">
+                                                <div class="bug-title">${b.title}</div>
+                                                <div style="margin-top: var(--space-xs); display: flex; justify-content: space-between; font-size: 12px;">
+                                                    <span class="bug-severity ${b.severity}">${b.severity}</span>
+                                                    <span style="color: var(--color-text-secondary);">Seen ${b.times_seen} times</span>
+                                                </div>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                    <h4 style="margin-top: var(--space-lg);">Recent Decisions</h4>
+                                    <ul class="details-list">
+                                        ${team.recent_decisions.map(d => `
+                                            <li class="decision-item">
+                                                <div class="decision-title">${d.decision}</div>
+                                                <div class="decision-rationale">${d.rationale}</div>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(detailsRow);
+                }
+            });
+        }
+
+        // Toggle team details
+        function toggleTeamDetails(teamId) {
+            if (expandedTeams.has(teamId)) {
+                expandedTeams.delete(teamId);
+            } else {
+                expandedTeams.add(teamId);
+            }
+            renderTeamTable();
+        }
+
+        // Render org insights
+        function renderInsights() {
+            if (currentRole === 'manager') {
+                document.getElementById('insightsSection').classList.add('hidden');
+                return;
+            }
+
+            document.getElementById('insightsSection').classList.remove('hidden');
+
+            // Aggregate top patterns
+            const allPatterns = [];
+            MOCK_DATA.teams.forEach(team => {
+                allPatterns.push(...team.top_patterns.map(p => ({
+                    ...p,
+                    team: team.name
+                })));
+            });
+            allPatterns.sort((a, b) => b.effectiveness - a.effectiveness);
+            const topPatterns = allPatterns.slice(0, 5);
+
+            document.getElementById('topPatterns').innerHTML = topPatterns.map(p => `
+                <div class="insight-item">
+                    <div class="insight-item-title">${p.pattern}</div>
+                    <div class="insight-item-meta">
+                        <span class="insight-badge">${Math.round(p.effectiveness * 100)}% effective</span>
+                        <span>${p.domain}</span>
+                        <span style="color: var(--color-text-tertiary);">via ${p.team}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            // Cross-team bugs
+            const bugTitleCounts = {};
+            MOCK_DATA.teams.forEach(team => {
+                team.top_bugs.forEach(bug => {
+                    bugTitleCounts[bug.title] = (bugTitleCounts[bug.title] || 0) + 1;
+                });
+            });
+            const crossTeamBugs = Object.entries(bugTitleCounts)
+                .filter(([_, count]) => count > 1)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+            document.getElementById('crossTeamBugs').innerHTML = crossTeamBugs.length > 0
+                ? crossTeamBugs.map(([bug, count]) => `
+                    <div class="insight-item">
+                        <div class="insight-item-title">${bug}</div>
+                        <div class="insight-item-meta">
+                            <span class="insight-badge" style="background-color: var(--color-red-dim); color: var(--color-red);">Seen in ${count} teams</span>
+                        </div>
+                    </div>
+                `).join('')
+                : '<div class="insight-item"><div class="insight-item-title">No significant cross-team bug patterns detected</div></div>';
+
+            // Knowledge gaps
+            const gaps = [
+                { area: 'GraphQL', coverage: '0%', team: 'Frontend' },
+                { area: 'Kubernetes advanced patterns', coverage: '20%', team: 'Infra' },
+                { area: 'Web accessibility (WCAG)', coverage: '35%', team: 'Frontend' }
+            ];
+
+            document.getElementById('knowledgeGaps').innerHTML = gaps.map(g => `
+                <div class="insight-item">
+                    <div class="insight-item-title">${g.area}</div>
+                    <div class="insight-item-meta">
+                        <span style="color: var(--color-red);">Coverage: ${g.coverage}</span>
+                        <span style="color: var(--color-text-tertiary);">in ${g.team}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Handle role changes
+        document.querySelectorAll('.role-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentRole = e.target.dataset.role;
+                expandedTeams.clear();
+                renderTeamTable();
+                renderInsights();
+            });
+        });
+
+        // Handle table sorting
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                const column = th.dataset.column;
+                if (currentSort.column === column) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.column = column;
+                    currentSort.direction = 'asc';
+                }
+
+                // Update visual indicators
+                document.querySelectorAll('th.sorted').forEach(h => h.classList.remove('sorted', 'asc', 'desc'));
+                th.classList.add('sorted', currentSort.direction);
+
+                renderTeamTable();
+            });
+        });
+
+        // Initial render
+        renderTeamTable();
+        renderInsights();
+
+        // Set initial sort indicator
+        document.querySelector('th[data-column="name"]').classList.add('sorted', 'asc');
+    </script>
+</body>
+</html>

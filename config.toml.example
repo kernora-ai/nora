@@ -1,0 +1,61 @@
+# Kernora — AI Work Intelligence
+# Elastic License 2.0 — commercial use requires agreement with kernora.ai
+#
+# Copy to ~/.kernora/config.toml  (install.sh does this automatically)
+
+[mode]
+type = "byok"
+# "byok"   = your key, your machine — zero bytes to Kernora (default)
+# "team"   = local analysis + structured sync to your S3 bucket (Phase 1)
+
+[model]
+provider = "anthropic"
+# "anthropic" = ANTHROPIC_API_KEY → claude-haiku-4-5-20251001  (~$0.18/dev/mo)
+# "bedrock"   = AWS_PROFILE → amazon.nova-lite-v1:0           (~$0.012/dev/mo)
+# "google"    = GEMINI_API_KEY → gemini-1.5-pro
+# "openai"    = OPENAI_API_KEY → gpt-4o
+# "grok"      = XAI_API_KEY → grok-beta
+# "ollama"    = localhost:11434 → llama3.2:3b                 (free, local)
+# "auto"      = tries keys in order then bedrock then ollama
+
+[bedrock]
+region = "us-east-1"
+model  = "amazon.nova-lite-v1:0"
+
+[google]
+model = "gemini-2.5-pro"
+
+[openai]
+model = "gpt-5.4-mini"
+
+[grok]
+model = "grok-4.20"
+
+[ollama]
+model = "llama3.2:3b"
+host  = "http://localhost:11434"
+
+[analysis]
+run_every_minutes  = 60
+max_sessions_per_run = 20
+
+[dashboard]
+port     = 2742
+auto_open = true
+
+[privacy]
+verified = true
+# Confirms Kernora receives zero data in byok mode.
+# Verified by network audit during install.
+
+[swarm]
+type = "byok_s3" 
+# "byok_s3" = You own the S3 Bucket infrastructure explicitly.
+# "kernora_managed" = Auto-provisioned zero-friction bucket natively within Kernora Enterprise AWS.
+director_mode = false
+bucket = "kernora-enterprise-swarm"
+region = "us-east-1"
+
+[aws]
+access_key = ""
+secret_key = ""

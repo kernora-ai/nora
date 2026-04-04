@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.kernora-engine/cli_shield.py $PROMPT",
+            "async": false
+          }
+        ]
+      }
+    ]
+  }
+}

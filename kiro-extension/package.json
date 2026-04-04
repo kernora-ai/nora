@@ -1,0 +1,72 @@
+{
+  "name": "kernora",
+  "displayName": "Kernora — AI Work Intelligence",
+  "description": "AI work intelligence for developers. Track your AI leverage, capture patterns, and get coaching on how to get more from every session.",
+  "version": "2.1.0",
+  "publisher": "kernora",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "icon": "resources/icon.png",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kernora-sidebar",
+          "title": "Kernora",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "kernora-sidebar": [
+        {
+          "type": "webview",
+          "id": "kernoraWelcome",
+          "name": "Dashboard",
+          "icon": "resources/icon.svg",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "kernora.openDashboard",
+        "title": "Kernora: Open Dashboard"
+      },
+      {
+        "command": "kernora.openDashboardExternal",
+        "title": "Kernora: Open Dashboard in Browser"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "watch:py": "npx nodemon --watch ../ --ext py --ignore bundled/ --ignore node_modules/ --exec 'bash ../sync.sh'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kernora-ai/kernora.git"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "18.x",
+    "typescript": "^5.1.3",
+    "@vscode/vsce": "^2.19.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "languageModels": "readonly"
+  }
+}
