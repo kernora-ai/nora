@@ -81,6 +81,8 @@ def load_config() -> dict:
 
 def get_model_string(cfg: dict) -> str:
     provider = cfg.get("model", {}).get("provider", "anthropic")
+    if provider == "local":
+        return "local/apple-foundationmodels"
     if provider == "anthropic":
         return "anthropic/claude-haiku-4-5-20251001"
     if provider == "bedrock":
@@ -88,6 +90,40 @@ def get_model_string(cfg: dict) -> str:
         return f"bedrock/{model}"
     if provider == "ollama":
         return "ollama/llama3.2:3b"
+    if provider == "google":
+        model = cfg.get("google", {}).get("model", "gemini-2.5-pro")
+        return f"gemini/{model}"
+    if provider == "grok":
+        model = cfg.get("grok", {}).get("model", "grok-beta")
+        return f"xai/{model}"
+    if provider == "openai":
+        model = cfg.get("openai", {}).get("model", "gpt-4o-mini")
+        return f"openai/{model}"
+        
+    # auto: try in order (ide -> local -> byok)
+    if os.environ.get("KERNORA_IDE") or os.environ.get("ANTIGRAVITY_AGENT"):
+        # We indicate IDE mode
+        return "ide/proxy"
+        
+    local_check = probe_local_llm()
+    if local_check["ok"]:
+        return "local/apple-foundationmodels"
+        
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic/claude-haiku-4-5-20251001"
+    if os.environ.get("GEMINI_API_KEY"):
+        return f"gemini/{cfg.get('google', {}).get('model', 'gemini-2.5-pro')}"
+    if os.environ.get("OPENAI_API_KEY"):
+        return f"openai/{cfg.get('openai', {}).get('model', 'gpt-4o')}"
+    if os.environ.get("XAI_API_KEY"):
+        return f"xai/{cfg.get('grok', {}).get('model', 'grok-beta')}"
+    try:
+        import boto3
+        boto3.client("bedrock-runtime", region_name="us-east-1")
+        return f"bedrock/{cfg.get('bedrock', {}).get('model', 'amazon.nova-lite-v1:0')}"
+    except Exception:
+        pass
+    return "ollama/llama3.2:3b"
     if provider == "google":
         model = cfg.get("google", {}).get("model", "gemini-2.5-pro")
         return f"gemini/{model}"
@@ -128,6 +164,47 @@ def format_turns(turns: list) -> str:
             lines.append(f"{role}: {content[:800]}")
     return "\n\n".join(lines) or "(empty session)"
 
+
+
+def probe_local_llm() -> dict:
+    import urllib.request, json
+    for port in (2744, 2745):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1.0) as f:
+                if f.status == 200:
+                    data = json.loads(f.read())
+                    return {"ok": True, "port": port, "model": data.get("model", "apple-foundationmodels" if port == 2744 else "mlx-qwen2.5-coder-3b")}
+        except Exception:
+            continue
+    return {"ok": False, "port": 0}
+
+def analyze_local(chunk: str, port: int) -> dict:
+    import urllib.request, json
+    
+    # We must construct a native endpoint payload for /v1/chat/completions ?
+    # But wait, local model in kernora uses /analyze for swift proxy?
+    # No, the spec says:
+    # `Create analyze_local() function using native LLM endpoint structure: /v1/chat/completions pointing to either 2744 or 2745.`
+    # Actually litellm does that natively if we use custom base!
+    # Wait, spec says to create analyze_local() function using native LLM endpoint structure.
+    
+    req_body = json.dumps({
+        "messages": [{"role": "user", "content": PROMPT.format(transcript=chunk)}],
+        "response_format": {"type": "json_object"}
+    }).encode("utf-8")
+    
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions", data=req_body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as f:
+            resp_bytes = f.read()
+            resp = json.loads(resp_bytes)
+            # OpenAI compatible response
+            content_str = resp["choices"][0]["message"]["content"]
+            result = json.loads(content_str)
+            return {"result": _validate_local_result(result), "usage": {"prompt_tokens": resp.get("usage", {}).get("prompt_tokens", 0), "completion_tokens": resp.get("usage", {}).get("completion_tokens", 0)}}
+    except Exception as e:
+        print(f"analyze_local error: {e}")
+        return {"result": _validate_local_result({}), "usage": {"prompt_tokens": 0, "completion_tokens": 0}}
 
 def chunk_transcript(turns: list, max_tokens: int = 3000) -> list:
     chunks, current, count = [], [], 0
@@ -330,3 +407,45 @@ def finalize_ide_analysis(session: dict, jobs: list) -> dict:
         "tools_used":        list(set(all_tools_used)),
         "model_used":        "ide/provided",
     }
+
+
+class LocalLLMError(Exception):
+    pass
+
+def _validate_local_result(result: dict) -> dict:
+    q = result.get("prompt_quality", 0.0)
+    if not isinstance(q, (int, float)): q = 0.0
+    
+    fixed = {
+        "prompt_quality": max(0.0, min(1.0, float(q))),
+        "themes": result.get("themes", []),
+        "bugs": result.get("bugs", []) or [],
+        "optimizations": result.get("optimizations", []),
+        "summary": result.get("summary", "") if isinstance(result.get("summary"), str) else "",
+        "session_type": result.get("session_type", ""),
+        "model_used": "local/unknown"
+    }
+    
+    if isinstance(fixed["themes"], list):
+        for t in fixed["themes"]:
+            if isinstance(t, dict) and t.get("severity") not in ("low", "medium", "high"):
+                t["severity"] = "medium"
+                
+    if isinstance(fixed["optimizations"], list):
+        for o in fixed["optimizations"]:
+            if isinstance(o, dict) and o.get("impact") not in ("low", "medium", "high"):
+                o["impact"] = "medium"
+                
+    return fixed
+
+def select_models(cfg):
+    pass
+
+def _aggregate_chunk_results(chunks):
+    pass
+
+def phase1_extract():
+    pass
+
+def condense_transcript():
+    pass

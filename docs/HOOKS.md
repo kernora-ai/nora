@@ -43,8 +43,8 @@ Nora integrates with AI coding agents (Kiro and Claude Code) via a hook system. 
 ```
 
 **Expected behavior**:
-1. Verify daemon is healthy (test socket connection to `~/.nora/daemon.sock`)
-2. Log session start to local SQLite (nora.db)
+1. Verify daemon is healthy (test socket connection to `~/.kernora/daemon.sock`)
+2. Log session start to local SQLite (echo.db)
 3. Read session stats from past 30 days (count, success rate, avg duration)
 4. Print session summary to stdout (shown in agent output)
 5. Check steering file mtimes — if >24h old, print warning to stderr
@@ -255,11 +255,11 @@ if (!SECRET_KEY) throw new Error('SECRET_KEY env var not set');
 
 **Expected behavior**:
 1. Parse tool output (stdout, stderr, exit_code)
-2. Search nora.db for past sessions with similar error signatures
+2. Search echo.db for past sessions with similar error signatures
 3. If match found (confidence >0.7):
    - Log the match and suggested fix to local DB
    - Print suggestion to stderr
-4. Log tool metric to nora.db: (tool_name, exit_code, duration_est, error_class)
+4. Log tool metric to echo.db: (tool_name, exit_code, duration_est, error_class)
 5. Exit 0 always (never block)
 
 **Output format**:
@@ -306,9 +306,9 @@ stdout: (optional context for agent)
 **Expected behavior**:
 1. Read transcript from `transcript_path` (JSONL format, one message per line)
 2. Validate transcript is non-empty and well-formed
-3. Send to daemon via socket (`~/.nora/daemon.sock`) with session metadata
+3. Send to daemon via socket (`~/.kernora/daemon.sock`) with session metadata
 4. Wait for daemon ACK (timeout 5 seconds)
-5. Log session completion to nora.db
+5. Log session completion to echo.db
 6. Clean up temporary files if desired
 7. Exit 0
 
@@ -431,7 +431,7 @@ All hooks (Kiro and Claude Code) follow this contract:
 ### Network/Concurrency
 - **NO network calls** (localhost sockets only, never HTTP)
 - **NO external dependencies** (stdlib + SQLite only)
-- **Thread-safe**: Nora daemon serializes writes to nora.db
+- **Thread-safe**: Nora daemon serializes writes to echo.db
 - **Async-safe**: Hooks return immediately; daemon processes asynchronously
 
 ### Timeout Behavior
@@ -490,7 +490,7 @@ When implementing a new hook:
 - [ ] No external network calls (localhost socket to daemon only if needed)
 - [ ] No dependencies outside stdlib + SQLite3
 - [ ] Hook respects timeout (returns before timeout expires)
-- [ ] Hook handles missing nora.db gracefully (if first run)
+- [ ] Hook handles missing echo.db gracefully (if first run)
 - [ ] Hook logs errors to stderr, not silently failing
 - [ ] No sensitive data logged to stdout (credentials, tokens, etc.)
 
@@ -507,6 +507,7 @@ User types: `"Fix the JWT token validation — it's rejecting valid tokens"`
 2. **userPromptSubmit** fires (user submits prompt)
    - Nora searches past sessions, finds 3 similar fixes
    - Prints ranked suggestions with code patterns
+   - Injects current AI Leverage Score into prompt
 
 3. Kiro reads suggestions, generates a fix
 
@@ -572,9 +573,9 @@ echo '{"hook": "preToolUse", "tool_name": "Write", "tool_input": {"file_path": "
   python3 ~/.kiro/hooks/nora_pretool.py
 ```
 
-Check nora.db directly:
+Check echo.db directly:
 ```bash
-sqlite3 ~/.nora/nora.db
+sqlite3 ~/.nora/echo.db
 > SELECT * FROM sessions LIMIT 5;
 > SELECT * FROM tool_metrics WHERE tool_name = 'Bash';
 > SELECT * FROM error_signatures LIMIT 10;
@@ -591,12 +592,47 @@ cat ~/.kiro/steering/nora-antipatterns.md
 ## Performance Notes
 
 - **Hook latency**: userPromptSubmit (3s max), preToolUse (2s max) — these block the agent
-- **Database size**: nora.db grows ~1-2 MB per 100 sessions; normal operation
+- **Database size**: echo.db grows ~1-2 MB per 100 sessions; normal operation
 - **FTS5 index**: Built incrementally; first 10 sessions may be slower
 - **Daemon memory**: ~50 MB for 1000 sessions in analysis queue
 - **Steering file updates**: Daemon runs analysis every 24h or on-demand via `nora analyze`
 
 ---
+
+## Hook File Locations
+
+- **Extension install**: hooks are located in `kiro-extension/bundled/` (registered dynamically by `extension.ts`)
+- **Standalone CLI install**: hooks are located in `~/.kernora/app/` (registered by `install.sh`)
+- **Claude Code**: hooks are located in `~/.claude/hooks/` (registered by `install.sh`)
+
+## Decision Trace Capture
+
+Note that decision trace capturing (via `trace_parser.py`) runs in the background analysis loop (Tenet 9) and **NOT** in the synchronous hooks. Hooks are kept lightweight to avoid blocking agent execution.
+
+## Local LLM Status
+
+Hooks do not directly interact with local LLMs. The analysis pipeline (daemon/dashboard) checks availability on ports 2744/2745 and automatically falls back to local execution if the IDE's native LLM proxy fails or is unconfigured.
+
+## 18-Tool MCP Reference
+
+1. `nora_stats`: Get dashboard metrics
+2. `nora_patterns`: Get project-level effective patterns
+3. `nora_decisions`: Get architectural decisions
+4. `nora_bugs`: List active/resolved bugs
+5. `nora_skills`: List skill injection opportunities
+6. `nora_search`: Semantic search across all knowledge
+7. `nora_dashboard`: Get dashboard URL context
+8. `nora_trend`: Leverage score timeseries
+9. `nora_trace_metrics`: Decision trace overview
+10. `nora_projects`: Project listing
+11. `nora_ide_status`: Editor proxy status
+12. `nora_llm_status`: Apple local LLM status
+13. `nora_loop_status`: Compounding loop health
+14. `nora_sync_trigger`: Force trace parsing
+15. `nora_history`: Fetch user specific history
+16. `nora_ide_heartbeat`: Last IDE activity
+17. `nora_coach`: Active coaching directives
+18. `nora_report`: Generate knowledge artifact
 
 ## See Also
 

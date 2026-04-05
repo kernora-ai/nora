@@ -4,14 +4,14 @@ A claw is a lightweight adapter that captures transcripts from a specific AI cod
 
 ## Overview
 
-Every AI coding agent stores session transcripts somewhere — Claude Code uses JSONL files, Cursor uses SQLite, Kiro uses its own format. A claw's job is simple: read that format and pipe it to Nora. That's it. No analysis logic, no model calls, no storage.
+Every AI coding agent stores session transcripts somewhere — Claude Code uses JSONL files, Cursor uses SQLite, Kiro uses its own format. A claw's job is simple: read that format and pipe it to Nora. That's it. No analysis logic, no model calls, no storage. Note that the extension-based install (Kiro/VS Code/Cursor) handles session capture automatically via hooks — claws are only needed for standalone CLI installs.
 
 ## Transport
 
 Nora listens on a Unix domain socket:
 
 ```
-~/.kernora/nora.sock
+~/.kernora/daemon.sock
 ```
 
 Send a JSON envelope over the socket. Nora acknowledges with `{"ok": true}` or `{"error": "reason"}`.
@@ -68,7 +68,7 @@ Send a JSON envelope over the socket. Nora acknowledges with `{"ok": true}` or `
 | `started_at` | string | ISO-8601 timestamp. |
 | `ended_at` | string | ISO-8601 timestamp. |
 | `model` | string | Primary model used in the session. |
-| `metadata` | object | Agent-specific metadata. Nora stores but doesn't require specific keys. |
+| `metadata` | object | Agent-specific metadata. Optional metadata properties include `ide_llm_failed` (boolean) and `analysis_source` (string, values: "byok", "ide", "local"). |
 
 ### Turn format
 
@@ -87,7 +87,7 @@ Nora's Phase 1 extractor understands tool use blocks from Claude Code's native f
 1. **Agent session ends** → your claw detects this (file watcher, hook, event listener)
 2. **Claw reads transcript** from the agent's native storage
 3. **Claw converts** to the envelope format above
-4. **Claw sends** over Unix socket to `~/.kernora/nora.sock`
+4. **Claw sends** over Unix socket to `~/.kernora/daemon.sock`
 5. **Nora acknowledges** with `{"ok": true, "queued": true}`
 6. **Nora analyzes asynchronously** — the claw doesn't wait
 
@@ -99,7 +99,7 @@ import socket
 
 def send_to_nora(session: dict):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(str(Path.home() / ".kernora" / "nora.sock"))
+    sock.connect(str(Path.home() / ".kernora" / "daemon.sock"))
     sock.sendall(json.dumps(session).encode() + b"\n")
     response = sock.recv(1024)
     sock.close()
@@ -131,7 +131,7 @@ test_envelope = {
 }
 
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.connect(str(Path.home() / ".kernora" / "nora.sock"))
+sock.connect(str(Path.home() / ".kernora" / "daemon.sock"))
 sock.sendall(json.dumps(test_envelope).encode() + b"\n")
 response = json.loads(sock.recv(1024))
 print(response)  # {"ok": true, "queued": true}

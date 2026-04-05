@@ -355,6 +355,61 @@ def test_prop_analysis_source_rendering(dashboard_client, temp_db, source):
     resp = dashboard_client.get("/sessions/s1")
     assert resp.status_code == 200
     if source == "ide":
-        assert b"Kiro LLM" in resp.data
+        assert b"IDE LLM" in resp.data
     else:
         assert b"BYOK" in resp.data
+
+def test_steering_file_population(temp_db):
+    """Test 12.3: Verify that after analysis, steering files contain real content."""
+    import db
+    import sqlite3
+    import os
+    from pathlib import Path
+    import steering_writer
+    
+    db.DB_PATH = Path(temp_db)
+    conn = db.get_conn()
+    sess_id = "test_steering_sess"
+    project_dir = "/tmp/kiro_steering_test"
+    with conn:
+        conn.execute("INSERT OR IGNORE INTO sessions (id, project) VALUES (?, ?)", (sess_id, project_dir))
+    
+    insight_data = {
+        "summary": "Steering test summary",
+        "prompt_quality": 0.9,
+        "themes": [{"label": "T1", "severity": "medium", "count": 1}],
+        "bugs": [{"title": "B1", "severity": "high", "error_signature": "err", "file_path": "a.py", "fix_code": "fix"}],
+        "optimizations": [{"title": "O1", "impact": "high", "suggestion": "sugg"}],
+        "reusable_patterns": [{"pattern": "P1", "context": "ctx"}],
+        "architectural_decisions": [{"decision": "D1", "rationale": "R1"}],
+        "skill_opportunity": "Learn X",
+        "knowledge_domains": ["D1"]
+    }
+    db.mark_analyzed(sess_id, insight_data)
+    
+    # Mock GLOBAL_STEERING
+    import tempfile
+    d = tempfile.mkdtemp()
+    original_steering = steering_writer.GLOBAL_STEERING
+    steering_writer.GLOBAL_STEERING = Path(d)
+    
+    try:
+        steering_writer.generate_all()
+        
+        nora_patterns = Path(f"{d}/kernora-patterns.md")
+        nora_decisions = Path(f"{d}/kernora-decisions.md")
+        nora_bugs = Path(f"{d}/kernora-antipatterns.md")
+        
+        assert nora_patterns.exists()
+        content_pat = nora_patterns.read_text()
+        assert "P1" in content_pat
+        
+        assert nora_decisions.exists()
+        dec_content = nora_decisions.read_text()
+        assert "D1" in dec_content
+        
+        assert nora_bugs.exists()
+        bug_content = nora_bugs.read_text()
+        assert "B1" in bug_content
+    finally:
+        steering_writer.GLOBAL_STEERING = original_steering

@@ -45,6 +45,9 @@ except ImportError:
     _telemetry = None  # type: ignore
 
 app = Flask(__name__)
+_analysis_stalled = False
+_pending_rules = []
+
 DB  = Path.home() / ".kernora" / "echo.db"
 CFG = Path.home() / ".kernora" / "config.toml"
 
@@ -100,7 +103,7 @@ nav {
   background: rgba(7, 9, 13, 0.6); backdrop-filter: blur(10px);
 }
 nav a {
-  color: #8ba4be; font-size: .8rem; font-weight: 500; padding: .5rem 1rem; text-decoration: none;
+  color: #8ba4be; font-size: .85rem; font-weight: 500; padding: .5rem 1rem; text-decoration: none;
   border-radius: 6px; transition: all 0.2s ease;
 }
 nav a:hover { color: #fff; background: rgba(255,255,255,0.03); }
@@ -113,7 +116,7 @@ nav a.active { color: #fff; background: rgba(29, 158, 117, 0.15); box-shadow: in
 }
 .kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.1); }
 .kpi-label { font-size: .7rem; color: #8ba4be; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .5rem; }
-.kpi-value { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
+.kpi-value { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; }
 
 table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .8rem; }
 th { text-align: left; font-size: .7rem; color: #8ba4be; font-weight: 600; padding: .75rem 1rem; border-bottom: 1px solid var(--border-subtle); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -129,7 +132,7 @@ tr:hover td { background: rgba(255,255,255,0.015); }
 .card:hover { border-color: rgba(255,255,255,0.1); }
 .rule {
   background: rgba(7, 21, 16, 0.4); border-left: 2px solid var(--teal); padding: .75rem 1rem;
-  margin: .5rem 0; font-size: .8rem; border-radius: 0 6px 6px 0;
+  margin: .5rem 0; font-size: .8rem; border-radius: 0 6px 6px 0; white-space: pre-wrap;
 }
 .setting-row { display: flex; align-items: center; justify-content: space-between; padding: .75rem 0; border-bottom: 1px solid var(--border-subtle); font-size: .85rem; }
 .privacy { background: rgba(7, 21, 16, 0.4); border: 1px solid rgba(29, 158, 117, 0.3); border-radius: 8px; padding: 1rem; margin-top: 1rem; font-size: .8rem; color: var(--teal); }
@@ -140,7 +143,7 @@ select, input[type=text] {
 }
 select:focus, input[type=text]:focus { outline: none; border-color: var(--blue); }
 
-.btn { display: inline-block; background: var(--teal); color: #fff; padding: 8px 16px; border-radius: 6px; font-size: .8rem; font-weight: 500; text-decoration: none; border: none; cursor: pointer; transition: background 0.2s; }
+.btn { display: inline-block; background: var(--teal); color: #fff; padding: 8px 24px; border-radius: 6px; font-size: .8rem; font-weight: 500; text-decoration: none; border: none; cursor: pointer; transition: background 0.2s; }
 .btn:hover { background: #168a65; }
 .btn-secondary {
   display: inline-block; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
@@ -178,7 +181,7 @@ footer a:hover { color: #fff; }
 </style>
 """
 
-HTMX = '<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.12/htmx.min.js"></script>'
+HTMX = '<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.12/htmx.min.js" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>'
 
 # ── Persona configuration (engineering, product, ...) ────────────────────────
 PERSONA_CONFIG = {
@@ -389,11 +392,12 @@ def nav(active: str) -> str:
     nav_items = [
         ("Home", "/"),
         ("Activity", "/sessions"),
-        ("Issues", "/bugs"),
+        ("Coach", "/coach"),
+        ("Projects", "/projects"),
+        ("Bugs", "/bugs"),
         ("Knowledge", "/learnings"),
         ("Memory", "/memory"),
         ("Decisions", "/decisions"),
-        ("Coach", "/coach"),
         ("Settings", "/settings"),
     ]
     links = nav_items
@@ -415,24 +419,23 @@ def shell(title: str, content: str, active: str) -> str:
         if ide_name == "Antigravity":
             badge_text = llm.get("model", "Gemini 3.1 Pro")
             badge = f'<span class="badge-byok" style="border-color:#378ADD;color:#378ADD" title="Server spawned by {ide_name}">{badge_text}</span>'
-            logo_text = "◎ kernora<span>.ai</span> "
         else:
-            badge = f'<span class="badge-byok" style="border-color:#378ADD;color:#378ADD" title="Server spawned by {ide_name}">{ide_name}</span>'
-            logo_text = "&#9678; kernora<span>.ai</span> "
-        mode_label = "AI Work Intelligence · Central"
+            badge = f'<span class="badge-byok" style="border-color:#378ADD;color:#378ADD" title="Server spawned by {ide_name}">IDE LLM</span>'
+        logo_text = "&#9678; nora <span>by kernora</span> "
+        mode_label = "AI Work Intelligence"
     else:
         badge = '<span class="badge-byok" title="Bring Your Own Key">BYOK</span>' if mode == "byok" else ""
-        mode_label = f"AI Work Intelligence · Central"
-        logo_text = "&#9678; kernora<span>.ai</span> "
+        mode_label = f"AI Work Intelligence"
+        logo_text = "&#9678; nora <span>by kernora</span> "
         
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Kernora — {title}</title>
 {CSS}{HTMX}</head><body>
 <div class="topbar">
   <span class="logo">{logo_text}{badge}</span>
-  <span style="font-size:.7rem;color:#8ba4be;display:flex;align-items:center;gap:16px;">
+  <span style="font-size:.8rem;color:#8ba4be;display:flex;align-items:center;gap:16px;">
     {mode_label}
-    <select style="font-size:.7rem;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#dce8f5;padding:2px 6px;border-radius:4px;">
+    <select style="font-size:.8rem;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#dce8f5;padding:2px 6px;border-radius:4px;">
       <option value="engineering" selected>Persona: Engineering</option>
       <option value="product">Persona: Product</option>
     </select>
@@ -542,44 +545,157 @@ def index():
 </div>"""
         return shell("Home", empty, "Home")
 
-    # TASK 6.1 — Value-first KPIs
+
+    # --- TASK 12.5 & 12.6 & Sprint 2 Leverage ---
+    global _analysis_stalled
+    global _pending_rules
+    
+    stall_warning = ""
+    if _analysis_stalled:
+        try:
+            unanalyzed = db.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 0").fetchone()[0]
+            stall_warning = f'''
+            <div style="background:var(--warning)20; border:1px solid var(--warning); padding:12px; border-radius:6px; margin-bottom:16px; color:var(--warning); display:flex; align-items:center;">
+               <span style="margin-right:8px;font-size:1.2em;">⚠️</span>
+               <span>{unanalyzed} sessions waiting for analysis — check LLM configuration</span>
+            </div>
+            '''
+        except Exception: pass
+
+    rules_notification = ""
+    if _pending_rules:
+        rule = _pending_rules[-1]
+        rules_notification = f'''
+        <div id="rule-suggestion" style="background:var(--surface-raised); border:1px solid var(--teal); padding:16px; border-radius:6px; margin-bottom:16px;">
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+             <div style="font-weight:600; color:var(--teal);">Nora suggests a new rule for your project rules</div>
+           </div>
+           <div style="font-family:monospace; font-size:12px; white-space:pre-wrap; background:var(--bg); padding:8px; border-radius:4px; margin-bottom:12px;">{html.escape(rule['text'])}</div>
+           <div style="display:flex; gap:8px;">
+             <button hx-post="/api/rules/apply" hx-target="#rule-suggestion" hx-swap="outerHTML" style="background:var(--teal); color:var(--bg); border:none; padding:4px 12px; border-radius:4px; cursor:pointer;">✔ Apply</button>
+             <button hx-post="/api/rules/dismiss" hx-target="#rule-suggestion" hx-swap="outerHTML" style="background:transparent; color:var(--muted); border:1px solid var(--border); padding:4px 12px; border-radius:4px; cursor:pointer;">Dismiss</button>
+           </div>
+        </div>
+        '''
+
     try:
+        from score_utils import compute_leverage, get_leverage_history
+        lev_data = compute_leverage(db)
+        leverage = lev_data["score"] if lev_data["score"] else "—"
+        leverage_label = lev_data["label"]
+        leverage_color = lev_data["label_color"]
+        
         session_count = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
         pattern_count = db.execute("SELECT COUNT(*) FROM patterns").fetchone()[0]
         bug_fix_count = db.execute("SELECT COUNT(*) FROM reported_bugs WHERE fix_code != ''").fetchone()[0]
         injections = db.execute("SELECT COUNT(*) FROM nora_metrics WHERE event_type = 'impression' AND created_at > datetime('now', '-7 days')").fetchone()[0]
-
-        quality_row = db.execute("SELECT AVG(prompt_quality) as avg_q FROM insights WHERE prompt_quality > 0").fetchone()
-        avg_quality = quality_row[0] or 0.0
-        insights_count = db.execute("SELECT COUNT(*) FROM insights").fetchone()[0]
-
-        # AI Leverage
-        if insights_count < 3:
-            leverage = "—"
-            leverage_label = "—"
-            leverage_color = "#6a8aaa"
+        
+        # 12.5 CAPTURE
+        total_sessions = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        sessions_this_week = db.execute("SELECT COUNT(*) FROM sessions WHERE started_at > datetime('now', '-7 days')").fetchone()[0]
+        capture_color = "var(--success)" if sessions_this_week > 0 else "var(--muted)"
+        
+        # 12.5 LEARN
+        unanalyzed = db.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 0").fetchone()[0]
+        analyzed = db.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 1").fetchone()[0]
+        learn_color = "var(--success)" if unanalyzed == 0 else "var(--warning)"
+        
+        # 12.5 IMPROVE
+        injections_this_week = db.execute("SELECT COUNT(*) FROM insights WHERE analyzed_at > datetime('now', '-7 days') AND prompt_coaching != ''").fetchone()[0]
+        rules_active = db.execute("SELECT COUNT(*) FROM insights WHERE skill_opportunity != ''").fetchone()[0]
+        improve_color = "var(--success)" if injections_this_week > 0 else "var(--muted)"
+        
+        # 12.6 COMPOUND
+        history = get_leverage_history(db)
+        if len(history) >= 2:
+            lev_this = history[-1]["score"]
+            lev_last = history[-2]["score"]
+            compound_rate = ((lev_this - lev_last) / lev_last) * 100
+            comp_color = "var(--success)" if compound_rate > 0 else "var(--muted)"
+            comp_val = f"{compound_rate:+.1f}%"
+            trend_text = f"Your AI effectiveness is compounding at {compound_rate:+.1f}%/week"
         else:
-            leverage = round(1.0 + (avg_quality * 4.0), 1)
-            if leverage >= 4.0:
-                leverage_label = "Excellent"
-                leverage_color = "#1D9E75"
-            elif leverage >= 3.0:
-                leverage_label = "Strong"
-                leverage_color = "#378ADD"
-            elif leverage >= 2.0:
-                leverage_label = "Developing"
-                leverage_color = "#BA7517"
-            else:
-                leverage_label = "Early Stage"
-                leverage_color = "#D85A30"
-    except Exception:
-        session_count = pattern_count = bug_fix_count = 0
-        avg_quality = 0.0
+            comp_color = "var(--muted)"
+            comp_val = "—"
+            trend_text = "Your AI effectiveness is compounding at —"
+            
+        loop_health_card = f'''
+        <div class="card" style="margin-bottom:24px;">
+            <h3 style="margin-top:0;font-size:14px;font-weight:600;margin-bottom:12px;color:var(--fg);">Loop Health</h3>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+              <a href="/activity" style="text-decoration:none;color:inherit;">
+                  <div class="card" style="border-left:3px solid {capture_color};height:100%;">
+                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">1. CAPTURE</div>
+                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{total_sessions}</div>
+                    <div style="font-size:12px;color:var(--muted);">{sessions_this_week} this week</div>
+                  </div>
+              </a>
+              <a href="/activity" style="text-decoration:none;color:inherit;">
+                  <div class="card" style="border-left:3px solid {learn_color};height:100%;">
+                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">2. LEARN</div>
+                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{analyzed}</div>
+                    <div style="font-size:12px;color:var(--muted);">{unanalyzed} pending</div>
+                  </div>
+              </a>
+              <a href="/coach" style="text-decoration:none;color:inherit;">
+                  <div class="card" style="border-left:3px solid {improve_color};height:100%;">
+                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">3. IMPROVE</div>
+                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{injections_this_week}</div>
+                    <div style="font-size:12px;color:var(--muted);">{rules_active} rules active</div>
+                  </div>
+              </a>
+              <a href="/coach" style="text-decoration:none;color:inherit;">
+                  <div class="card" style="border-left:3px solid {comp_color};height:100%;">
+                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">4. COMPOUND</div>
+                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{comp_val}</div>
+                    <div style="font-size:12px;color:var(--muted);">{trend_text}</div>
+                  </div>
+              </a>
+            </div>
+        </div>
+        '''
+
+    except Exception as e:
         leverage = "—"
         leverage_label = "—"
         leverage_color = "#6a8aaa"
+        loop_health_card = ""
+        trend_text = "—"
+        session_count = pattern_count = bug_fix_count = injections = 0
 
-    kpis = f"""
+
+    # 13.5 Top Projects
+    top_projects_html = ""
+    try:
+        top_projects = db.execute('''
+            SELECT project, COUNT(id) as c 
+            FROM sessions 
+            WHERE project != '' 
+            GROUP BY project 
+            ORDER BY c DESC LIMIT 3
+        ''').fetchall()
+        
+        if top_projects:
+            top_projects_html = "<div style='margin-top:32px;'><div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;'><h3 style='margin:0;font-size:14px;font-weight:600;'>Top Projects</h3><a href='/projects' style='font-size:12px;color:var(--teal);text-decoration:none;'>View all &rarr;</a></div><div style='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;'>"
+            for tp in top_projects:
+                proj_name = tp[0]
+                short_name = proj_name.split('/')[-1]
+                sess_c = tp[1]
+                top_projects_html += f'''
+                <a href="/projects/{proj_name.replace('/', '%2F')}" style="text-decoration:none;color:inherit;">
+                    <div class="card" style="border-left:3px solid var(--teal);padding:12px;">
+                        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{html.escape(short_name)}</div>
+                        <div style="font-size:11px;color:var(--muted);margin-top:4px;">{sess_c} sessions</div>
+                    </div>
+                </a>
+                '''
+            top_projects_html += "</div></div>"
+    except Exception:
+        pass
+
+    kpis = stall_warning + rules_notification + top_projects_html + loop_health_card + f"""
+
+
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
       <div class="kpi-row" style="margin-bottom:0;flex:1;">
         <div class="kpi" style="background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(20,25,35,0.5) 100%); cursor:pointer" hx-get="/sessions" hx-target="body" hx-push-url="true">
@@ -706,6 +822,7 @@ def index():
 
 
 @app.route("/sessions")
+@app.route("/activity")
 def sessions():
     """Activity page — list of sessions with time-ago formatting and outcome dots."""
     db = get_conn()
@@ -719,14 +836,23 @@ def sessions():
   </p>
 </div>"""
         return shell("Activity", empty, "Activity")
-    # Query only columns that exist in the schema (db.py).
-    rows = db.execute(
+        
+    project_filter = request.args.get("project", "")
+    all_projects = [r[0] for r in db.execute("SELECT DISTINCT project FROM sessions WHERE project != '' ORDER BY project ASC").fetchall()]
+    
+    query = (
         "SELECT s.id, s.project, s.started_at, s.ended_at, s.tokens_in, s.tokens_out, "
         "s.model, s.analyzed, i.summary, "
         "(SELECT COUNT(*) FROM reported_bugs r WHERE r.session_id = s.id) as bugs "
         "FROM sessions s LEFT JOIN insights i ON i.session_id=s.id "
-        "ORDER BY s.inserted_at DESC LIMIT 50"
-    ).fetchall()
+    )
+    if project_filter:
+        query += "WHERE s.project = ? ORDER BY s.inserted_at DESC LIMIT 50"
+        rows = db.execute(query, (project_filter,)).fetchall()
+    else:
+        query += "ORDER BY s.inserted_at DESC LIMIT 50"
+        rows = db.execute(query).fetchall()
+        
     db.close()
 
     def _source_badge(model, analyzed):
@@ -770,10 +896,25 @@ def sessions():
             f"<td style='color:#6a8aaa;font-size:.7rem'>{summ}</td></tr>"
         )
     trs = "".join(trs_parts)
-    content = f"""<table>
+    proj_options = '<option value="">All Projects</option>'
+    for p in all_projects:
+        short_p = p.split('/')[-1]
+        sel = " selected" if p == project_filter else ""
+        proj_options += f'<option value="{html.escape(p)}"{sel}>{html.escape(short_p)}</option>'
+        
+    filter_html = f'''
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;font-size:14px;">Session History</h3>
+        <select onchange="window.location.href='/sessions?project=' + encodeURIComponent(this.value)" style="background:var(--surface-raised);color:var(--fg);border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:12px;">
+            {proj_options}
+        </select>
+    </div>
+    '''
+    
+    content = filter_html + f"""<div style="max-width:1400px;margin:0 auto;overflow-x:auto;"><table>
     <tr><th></th><th>ID</th><th>Project</th><th>When</th><th>Tokens</th><th>Source</th><th>Summary</th></tr>
     {trs or "<tr><td colspan='7' style='color:#2e4460'>No sessions yet. Run <code>nora scan &lt;path&gt;</code> to seed from git history.</td></tr>"}
-    </table>"""
+    </table></div>"""
     return shell("Activity", content, "Activity")
 
 
@@ -857,10 +998,10 @@ def session_detail(session_id):
             )
             cards.append(f'<div class="card"><h3>Themes</h3><div style="display:flex;flex-wrap:wrap;gap:4px">{tags}</div></div>')
 
-        # Skill opportunity (CLAUDE.md rule)
+        # Skill opportunity (project rules)
         skill_opp = i_dict.get("skill_opportunity") or ""
         if skill_opp:
-            cards.append(f'<div class="card"><h3>CLAUDE.md Rule Suggestion</h3>'
+            cards.append(f'<div class="card"><h3>Project Rule Suggestion</h3>'
                          f'<div class="rule">{html.escape(skill_opp)}</div></div>')
 
     else:
@@ -872,7 +1013,7 @@ def session_detail(session_id):
     # Session metadata
     i_ref = i_dict or {}
     badge_bg = "#1D9E75" if i_ref.get("analysis_source") == "ide" else "#378ADD"
-    badge_txt = "Kiro LLM" if i_ref.get("analysis_source") == "ide" else "BYOK"
+    badge_txt = "IDE LLM" if i_ref.get("analysis_source") == "ide" else "BYOK"
     source_badge = f"<span style='background: {badge_bg}20; border: 1px solid {badge_bg}; color: {badge_bg}; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; margin-left: 8px;'>{badge_txt} Analysis</span>"
 
     cards.append(f"""<div class="card" style="color:#8ba4be;font-size:.7rem;border:1px solid #111820">
@@ -903,6 +1044,150 @@ def resolve_bug(bug_id):
     finally:
         db.close()
     return redirect("/bugs")
+
+_project_leverage_cache = {}
+
+@app.route("/projects")
+def projects():
+    """Projects top-level tab listing summary of active projects."""
+    db = get_conn()
+    if not db:
+        return shell("Projects", "<div style='padding:60px 24px;text-align:center;'>No projects yet</div>", "Projects")
+        
+    rows = db.execute('''
+        SELECT project, COUNT(id) as c, MAX(started_at) as last_seen
+        FROM sessions 
+        WHERE project != ''
+        GROUP BY project
+        ORDER BY last_seen DESC
+    ''').fetchall()
+    
+    if not rows:
+        return shell("Projects", "<div style='padding:60px 24px;text-align:center;'>No projects yet</div>", "Projects")
+        
+    html_out = ["<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;'>"]
+    from score_utils import compute_leverage
+    import time
+    
+    global _project_leverage_cache
+    
+    for row in rows:
+        project = row[0]
+        c = row[1]
+        last_seen = time_ago(row[2])
+        
+        # Cache logic
+        cache_key = f"{project}_{c}" # invalidate if run count changes
+        if cache_key not in _project_leverage_cache:
+            lev_data = compute_leverage(db, project_filter=project)
+            _project_leverage_cache[cache_key] = lev_data
+        
+        lev = _project_leverage_cache[cache_key]
+        score = lev['score'] if lev['score'] else "—"
+        color = lev['label_color']
+        
+        base_name = project.split("/")[-1] if "/" in project else project
+        
+        active_badge = ""
+        with _live_lock:
+            if _live_session.get("active") and _live_session.get("project") == project:
+                active_badge = " <span style='font-size:9px;padding:2px 6px;border-radius:10px;background:var(--success)20;color:var(--success);border:1px solid var(--success)'>ACTIVE</span>"
+        
+        html_out.append(f'''
+        <a href="/projects/{project.replace('/', '%2F')}" style="text-decoration:none;color:inherit;">
+            <div class="card" style="border-left:3px solid {color};cursor:pointer;">
+                <div style="font-weight:600;margin-bottom:8px;word-break:break-all;">{html.escape(base_name)}{active_badge}</div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">{html.escape(project)}</div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;">
+                    <span><span style="color:var(--muted)">Sessions:</span> {c}</span>
+                    <span><span style="color:var(--muted)">Leverage:</span> <strong style="color:{color}">{score}{'x' if score != '—' else ''}</strong></span>
+                    <span><span style="color:var(--muted)">Active:</span> {last_seen}</span>
+                </div>
+            </div>
+        </a>
+        ''')
+        
+    html_out.append("</div>")
+    return shell("Projects", "\n".join(html_out), "Projects")
+
+@app.route("/projects/<path:project_name>")
+def project_detail(project_name):
+    project_name = project_name.replace('%2F', '/')
+    db = get_conn()
+    if not db:
+        return shell(project_name, "", "Projects")
+        
+    # Project-level dashboard (Sessions + Patterns)
+    sessions = db.execute("SELECT * FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 50", (project_name,)).fetchall()
+    
+    from score_utils import compute_leverage
+    lev_data = compute_leverage(db, project_filter=project_name)
+    lev_str = f"<div style='font-size:24px;font-weight:700;color:{lev_data['label_color']}'>{lev_data['score'] if lev_data['score'] else '—'}x</div><div style='font-size:12px;color:var(--muted)'>AI Leverage</div>"
+    
+    html_out = [
+        f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;'>",
+        f"  <div>",
+        f"    <h2 style='margin:0;'>{html.escape(project_name.split('/')[-1])}</h2>",
+        f"    <div style='color:var(--muted);font-family:monospace;font-size:12px;'>{html.escape(project_name)}</div>",
+        f"  </div>",
+        
+        f"  <div style='text-align:right;'>",
+        f"    {lev_str}",
+        f"    <a href='/api/projects/{project_name.replace('/', '%2F')}/report' target='_blank' class='btn-secondary' style='display:inline-block;margin-top:12px;'>Export Report &rarr;</a>",
+        f"  </div>"
+    
+        f"</div>"
+    ]
+    
+    # Render mini-activity list
+    html_out.append("<div style='margin-top:24px;'><h3 style='font-size:14px;'>Recent Activity</h3>")
+    for s in sessions:
+        i = db.execute("SELECT * FROM insights WHERE session_id = ?", (s['id'],)).fetchone()
+        row_html = f'''
+        <div class="row-hover" style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="location.href='/sessions/{s['id']}'">
+            <div style="width:120px;color:var(--muted);font-size:.7rem;">{time_ago(s['started_at'])}</div>
+            <div style="flex:1">{html.escape(i['summary']) if i else '<span style="color:var(--amber)">Pending analysis...</span>'}</div>
+            <div style="width:80px;text-align:right;color:var(--muted);font-size:.7rem;">{s['tokens_in']+s['tokens_out']}t</div>
+        </div>
+        '''
+        html_out.append(row_html)
+    html_out.append("</div>")
+    
+    return shell(project_name.split('/')[-1], "\n".join(html_out), "Projects")
+
+
+@app.route("/api/leverage/certificate")
+def api_certificate():
+    db = get_conn()
+    if not db: return "No DB", 500
+    c = db.execute("SELECT COUNT(*) FROM insights").fetchone()[0]
+    if c < 3:
+        return "Not enough sessions", 400
+    return "<html><body>Kernora Certificate</body></html>"
+
+@app.route("/api/leverage/trend")
+def api_lev_trend():
+    from score_utils import compute_leverage
+    db = get_conn()
+    lev_data = compute_leverage(db) if db else {'score': 1.0}
+    if db: db.close()
+    return jsonify({"current_score": lev_data['score']})
+
+@app.route("/api/leverage/history")
+def api_lev_history():
+    return jsonify([])
+
+@app.route("/api/decision-traces/summary")
+def api_dt_summary():
+    return jsonify({"total_traces": 0})
+
+@app.route("/api/projects")
+def api_projects():
+    db = get_conn()
+    if not db:
+        return jsonify([])
+    rows = db.execute("SELECT DISTINCT project FROM sessions WHERE project != '' ORDER BY project ASC").fetchall()
+    return jsonify([r[0] for r in rows])
 
 @app.route("/bugs")
 def bugs():
@@ -972,6 +1257,7 @@ def bugs():
 
 
 @app.route("/learnings")
+@app.route("/knowledge")
 def learnings():
     """Knowledge page (renamed from Learnings) — Best Practices, Playbooks, Anti-patterns."""
     db = get_conn()
@@ -995,7 +1281,7 @@ def learnings():
     <div style="font-size:40px;margin-bottom:16px;">📚</div>
     <h2 style="font-size:18px;font-weight:700;color:#fff;margin-bottom:8px;">No patterns extracted yet</h2>
     <p style="color:#8ba4be;font-size:13px;line-height:1.5;margin-bottom:24px;">
-      Nora builds your institutional knowledge quietly in the background as you code.
+      Nora tracks your code and builds architectural knowledge dynamically. Once your first session completes, codebase patterns will appear here natively.
     </p>
     <p style="color:#6a8aaa;font-size:12px;">
       Run <code style="background:rgba(255,255,255,0.1);padding:3px 6px;border-radius:4px;">nora scan .</code> to seed knowledge from your git history.
@@ -1128,7 +1414,7 @@ def memory():
     what_nora_injects = f"""
     <div class='card' style='border-left:3px solid var(--teal);margin-bottom:1rem;'>
       <h3 style='color:#dce8f5;margin-top:0'>What Nora Injects</h3>
-      {latest_insight or "<p style='color:#2e4460'>No insights yet.</p>"}
+      {latest_insight or "<p style='color:#2e4460'>No contextual logic applied yet. Context tracking begins dynamically after your first AI session.</p>"}
       <p style='color:#6a8aaa;font-size:.75rem;margin-top:.5rem'>Top patterns:</p>
       <ul style='margin:.25rem 0;padding-left:1rem;'>{top_patterns or "<li style='color:#2e4460'>None yet.</li>"}</ul>
     </div>
@@ -1394,7 +1680,7 @@ def coach():
     db = get_conn()
     if not db:
         return shell("Coach", """
-        <div class="card" style="border-left:3px solid var(--info);text-align:center;">
+        <div class="card" style="border-left:3px solid var(--info);text-align:center;padding:40px;">
           <p style="color:#a1b0c0;margin:1rem 0;">Nora will start tracking your prompt quality once you complete your first AI session.</p>
           <p style="color:#6a8aaa;font-size:.75rem">Install the extension and start coding!</p>
           <br><a href="/welcome" style="color:var(--teal);font-size:13px;">View setup guide →</a>
@@ -1635,6 +1921,73 @@ def coach():
     content = section1 + section2 + section3 + mcp_html + section4
     return shell("Coach", content, "Coach")
 
+
+@app.route("/report/export")
+
+@app.route("/api/projects/<path:project_name>/report")
+def api_project_report(project_name):
+    project_name = project_name.replace('%2F', '/')
+    conn = get_conn()
+    try:
+        from score_utils import compute_leverage
+        lev_data = compute_leverage(conn, project_filter=project_name)
+        stats = conn.execute('''
+            SELECT COUNT(i.session_id) as sessions, SUM(i.tokens_estimated) as tokens
+            FROM insights i JOIN sessions s ON i.session_id = s.id
+            WHERE s.project = ? AND i.analyzed_at > datetime('now', '-30 days')
+        ''', (project_name,)).fetchone()
+        
+        # approximate bugs and patterns for project limit
+        bugs = conn.execute("SELECT COUNT(*) FROM reported_bugs r JOIN sessions s ON r.session_id=s.id WHERE s.project=?", (project_name,)).fetchone()[0]
+        sessions = stats["sessions"] or 0 if stats else 0
+        tokens = stats["tokens"] or 0 if stats else 0
+        leverage = lev_data["score"] if lev_data["score"] else "—"
+        leverage_lbl = lev_data["label"]
+        
+    except Exception:
+        sessions = 0
+        tokens = 0
+        leverage = "—"
+        leverage_lbl = "—"
+        bugs = 0
+    finally:
+        if conn: conn.close()
+        
+    html = f'''
+    <!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Kernora Project Report: {html.escape(project_name)}</title>
+    <style>
+      body {{ font-family: -apple-system, system-ui, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }}
+      h1 {{ font-size: 24px; border-bottom: 2px solid #eaeaea; padding-bottom: 16px; }}
+      .kpi-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 32px 0; }}
+      .kpi {{ border-left: 4px solid #378ADD; padding: 16px; background: #f8f9fa; }}
+      .kpi-lbl {{ font-size: 12px; text-transform: uppercase; color: #666; font-weight: 600; margin-bottom: 8px; }}
+      .kpi-val {{ font-size: 32px; font-weight: 700; }}
+    </style>
+    </head><body>
+      <div style="color:#666; font-size:14px; margin-bottom:8px;">Kernora Sub-ledger Export</div>
+      <h1>Project Report: {html.escape(project_name)}</h1>
+      
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-lbl">AI Leverage</div>
+          <div class="kpi-val">{leverage}{'x' if leverage != '—' else ''}</div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">{leverage_lbl}</div>
+        </div>
+        <div class="kpi" style="border-color:#1D9E75">
+          <div class="kpi-lbl">30-Day Sessions</div>
+          <div class="kpi-val">{sessions}</div>
+        </div>
+        <div class="kpi" style="border-color:#D85A30">
+          <div class="kpi-lbl">Bugs Fixed</div>
+          <div class="kpi-val">{bugs}</div>
+        </div>
+      </div>
+      
+      <p style="text-align:center; color:#999; margin-top:60px; font-size:12px;">Generated automatically via Kernora Local Intelligence.</p>
+    </body></html>
+    '''
+    return html
 
 @app.route("/report/export")
 def report_export():
@@ -2028,6 +2381,22 @@ def settings():
       Your sessions, your machine. Kernora provides execution code only.
     </div>"""
 
+    
+    global _analysis_stalled
+    if _analysis_stalled:
+        try:
+            db = get_conn()
+            unanalyzed = db.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 0").fetchone()[0]
+            db.close()
+            stall_html = f'''
+            <div style="background:var(--warning)20; border:1px solid var(--warning); padding:12px; border-radius:6px; margin-bottom:16px; color:var(--warning); display:flex; align-items:center;">
+               <span style="margin-right:8px;font-size:1.2em;">⚠️</span>
+               <span>Analysis status: stalled ({unanalyzed} pending) — <a href="https://kernora.ai/docs" style="color:var(--warning);text-decoration:underline;">Troubleshoot</a></span>
+            </div>
+            '''
+            content = stall_html + content
+        except Exception: pass
+        
     return shell("Settings", content, "Settings")
 
 @app.route("/settings/nuke", methods=["POST"])
@@ -2636,7 +3005,57 @@ def _kiro_session_scanner():
             _daemon_log(f"kiro scanner error: {e}")
 
 
+
+def _get_rules_file_path(project_dir: str) -> str:
+    ide = os.environ.get("KERNORA_IDE", "").lower()
+    if ide == "kiro":
+        return os.path.join(project_dir, ".kiro", "steering", "nora-patterns.md")
+    elif ide == "cursor":
+        return os.path.join(project_dir, ".cursorrules")
+    elif ide == "copilot":
+        return os.path.join(project_dir, ".github", "copilot-instructions.md")
+    # Default: CLAUDE.md (works for Claude Code, Antigravity, bare VS Code)
+    return os.path.join(project_dir, "CLAUDE.md")
+
+@app.route("/api/rules/apply", methods=["POST"])
+def apply_rule():
+    global _pending_rules
+    if not _pending_rules:
+        return ""
+    rule = _pending_rules.pop()
+    project_dir = rule.get("project", "")
+    
+    if project_dir and os.path.isdir(project_dir):
+        rules_path = _get_rules_file_path(project_dir)
+        try:
+            # check if exists
+            content = ""
+            if os.path.exists(rules_path):
+                with open(rules_path, "r") as f:
+                    content = f.read()
+            
+            # Simple dedup matching
+            if rule["text"] not in content:
+                os.makedirs(os.path.dirname(rules_path) or ".", exist_ok=True)
+                with open(rules_path, "a") as f:
+                    f.write(f"\n\n# Added by Nora · Kernora\n{rule['text']}\n")
+                _daemon_log(f"[nora] Suggested rule applied: {rule['text'][:40]}...")
+            else:
+                _daemon_log("[nora] Prevented duplicate rule insertion")
+        except Exception as e:
+            _daemon_log(f"Failed to write rule to {rules_path}: {e}")
+            
+    return "<div style='color:var(--success);'>Rule added to project rules</div>"
+
+@app.route("/api/rules/dismiss", methods=["POST"])
+def dismiss_rule():
+    global _pending_rules
+    if _pending_rules:
+        _pending_rules.pop()
+    return ""
+
 def _run_analysis():
+
     """Run analysis on unanalyzed sessions. Called by scanner or analysis loop."""
     try:
         from db import get_unanalyzed, mark_analyzed, get_jobs_for_session, delete_jobs_for_session
@@ -2672,6 +3091,14 @@ def _run_analysis():
                 mark_analyzed(session["id"], result, analysis_source='byok')
                 model = result.get("model_used", "?")
                 bugs = len(result.get("bugs", []))
+                
+                # TASK 12.4 CLAUDE.md Rules suggestion
+                rule_text = result.get("skill_opportunity", "")
+                if rule_text:
+                    global _pending_rules
+                    # Only add if not entirely identical to last
+                    if not _pending_rules or _pending_rules[-1]["text"] != rule_text:
+                        _pending_rules.append({"text": rule_text, "project": session.get("project", "")})
                 _daemon_log(f"analyzed {session['id'][:8]}: {bugs} bugs [{model}]")
             except Exception as e:
                 _daemon_log(f"analysis failed for {session['id'][:8]}: {e}")
@@ -2687,12 +3114,94 @@ def _run_analysis():
         _daemon_log(f"analysis error: {e}")
 
 
+
+def _auto_import_ide_sessions():
+    import glob
+    from datetime import datetime
+    paths = [
+        "~/.claude/projects/**/*.jsonl",
+        "~/.claude-code/sessions/**/*.jsonl",
+        "~/Library/Application Support/Claude/sessions/**/*.jsonl"
+    ]
+    
+    conn = get_conn()
+    if not conn: return
+    try:
+        with conn:
+            existing = {r[0] for r in conn.execute("SELECT id FROM sessions").fetchall()}
+            
+        imported = 0
+        for p in paths:
+            expanded_path = os.path.expanduser(p)
+            for filepath in glob.iglob(expanded_path, recursive=True):
+                session_id = Path(filepath).stem
+                if session_id in existing:
+                    continue
+                
+                try:
+                    turns = []
+                    with open(filepath, 'r') as f:
+                        for line in f:
+                            if not line.strip(): continue
+                            turns.append(json.loads(line))
+                    if not turns:
+                        continue
+                    
+                    content_len = sum(len(str(t.get("message", {}))) for t in turns)
+                    est_tokens = content_len // 4
+                    
+                    project = ""
+                    if ".claude/projects/" in filepath:
+                        parts = filepath.split("/")
+                        if len(parts) >= 2:
+                            project = parts[-2]
+                    
+                    with conn:
+                        conn.execute('''
+                            INSERT OR REPLACE INTO sessions
+                                (id, project, started_at, ended_at,
+                                 tokens_in, tokens_out, model, turns_json)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            session_id, project, datetime.now().isoformat(), datetime.now().isoformat(),
+                            est_tokens, 0, "auto-imported", json.dumps(turns)
+                        ))
+                    existing.add(session_id)
+                    imported += 1
+                except Exception:
+                    pass
+                    
+        if imported > 0:
+            _daemon_log(f"[auto-scan] Imported {imported} new sessions from IDE history")
+    except Exception as e:
+        _daemon_log(f"[auto-scan] Error: {e}")
+
 def _analysis_loop():
     """Periodic fallback: catch sessions missed by event-driven triggers."""
     _daemon_log("analysis loop started (10-min fallback)")
+    threading.Thread(target=_auto_import_ide_sessions, daemon=True).start()
     while True:
         time.sleep(600)  # 10 minutes — fallback only, scanner triggers immediately
+        
+        threading.Thread(target=_auto_import_ide_sessions, daemon=True).start()
         _run_analysis()
+        
+        # Stall detection
+        global _analysis_stalled
+        conn = get_conn()
+        if conn:
+            try:
+                with conn:
+                    unanalyzed = conn.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 0").fetchone()[0]
+                    recent = conn.execute("SELECT COUNT(*) FROM insights WHERE analyzed_at > datetime('now', '-30 minutes')").fetchone()[0]
+                    if unanalyzed > 5 and recent == 0:
+                        _analysis_stalled = True
+                        _daemon_log(f"analysis stalled: {unanalyzed} pending and no analysis in 30min")
+                    else:
+                        _analysis_stalled = False
+            except Exception:
+                pass
+
 
 
 if __name__ == "__main__":

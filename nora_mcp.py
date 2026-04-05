@@ -690,6 +690,10 @@ class NoraServer:
 
     # ── Stats ────────────────────────────────────────────────────────────────
 
+    
+    def _dashboard(self) -> str:
+        return "Dashboard live at http://localhost:2742"
+
     def _stats(self) -> str:
         """Get dashboard stats."""
         try:

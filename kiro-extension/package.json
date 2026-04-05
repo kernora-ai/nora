@@ -1,19 +1,20 @@
 {
   "name": "kernora",
   "displayName": "Kernora — AI Work Intelligence",
-  "description": "AI work intelligence for developers. Track your AI leverage, capture patterns, and get coaching on how to get more from every session.",
+  "description": "AI work intelligence for developers. Track your AI Leverage Score, capture patterns, get coaching — all locally. Zero telemetry.",
   "version": "2.1.0",
   "publisher": "kernora",
   "engines": {
     "vscode": "^1.80.0"
   },
   "icon": "resources/icon.png",
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "categories": ["Other", "Machine Learning"],
+  "keywords": ["ai", "llm", "productivity", "claude", "kiro", "cursor", "session", "patterns", "leverage", "coaching", "mcp"],
+  "galleryBanner": {
+    "color": "#07090d",
+    "theme": "dark"
+  },
+  "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -55,8 +56,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kernora-ai/kernora.git"
+    "url": "https://github.com/kernora-ai/nora.git"
   },
+  "homepage": "https://kernora.ai",
+  "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@types/vscode": "^1.80.0",
     "@types/node": "18.x",

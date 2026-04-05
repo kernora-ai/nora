@@ -29,3 +29,6 @@ cloud_backend/.cdk.staging/
 
 # Swift build artifacts
 kernora-native-mac/.build/
+
+# Hypothesis testing artifacts
+.hypothesis/
