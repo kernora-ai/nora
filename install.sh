@@ -7,6 +7,25 @@ set -e
 KERNORA_DIR="$HOME/.kernora"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+DOWNLOADED_REPO=false
+
+# ── Detect curl|bash and download files if REPO_DIR has no requirements.txt ──
+# When piped via `curl ... | bash`, BASH_SOURCE[0] is empty so REPO_DIR
+# resolves to the current working directory (not the repo). Detect this and
+# fetch the necessary files from GitHub into a temp directory.
+if [ ! -f "$REPO_DIR/requirements.txt" ]; then
+    REPO_DIR=$(mktemp -d)
+    DOWNLOADED_REPO=true
+    NORA_BASE="https://raw.githubusercontent.com/kernora-ai/nora/main"
+    echo "→ Downloading Nora from GitHub..."
+    for _f in requirements.txt config.toml.example \
+               nora_mcp.py analyzer.py db.py dashboard.py hook.py \
+               nora_context.py steering_writer.py \
+               nora_precompact.py nora_session_start.py; do
+        curl -fsSL "$NORA_BASE/$_f" -o "$REPO_DIR/$_f" 2>/dev/null || true
+    done
+    echo "✓ Files downloaded"
+fi
 
 echo ""
 echo "◎  Kernora — AI Work Intelligence"
@@ -69,7 +88,9 @@ for f in "${APP_FILES[@]}"; do
 done
 
 # Write version file (matches extension's syncBundledFiles behavior)
-VERSION=$("$PYTHON" -c "import json; print(json.load(open('$REPO_DIR/kiro-extension/package.json'))['version'])" 2>/dev/null || echo "unknown")
+VERSION=$("$PYTHON" -c "import json; print(json.load(open('$REPO_DIR/kiro-extension/package.json'))['version'])" 2>/dev/null \
+    || curl -fsSL "https://raw.githubusercontent.com/kernora-ai/nora/main/kiro-extension/package.json" 2>/dev/null | "$PYTHON" -c "import json,sys; print(json.load(sys.stdin)['version'])" 2>/dev/null \
+    || echo "unknown")
 echo "$VERSION" > "$KERNORA_DIR/app/.version"
 
 echo "✓ App files installed to ~/.kernora/app/ ($COPIED files, v$VERSION)"
@@ -194,12 +215,13 @@ config['mcpServers']['nora'] = {
         'nora_stats', 'nora_session', 'nora_scope_validation', 'nora_skills',
         'nora_scan', 'nora_pe_review', 'nora_coe', 'nora_coe_product',
         'nora_retro', 'nora_sofac', 'nora_inventory', 'nora_help',
+        'nora_coach', 'nora_onboard',
     ],
 }
 
 with open(mcp_file, 'w') as f:
     json.dump(config, f, indent=2)
-" && echo "  ✓ MCP registered in ~/.kiro/settings/mcp.json (16 tools, autoApprove)" \
+" && echo "  ✓ MCP registered in ~/.kiro/settings/mcp.json (18 tools, autoApprove)" \
    || echo "  ⚠ Could not write mcp.json"
 
     # Also try kiro-cli mcp add (syncs in-memory if kiro is already running)
@@ -300,6 +322,45 @@ SETTINGS_EOF
     fi
 
     echo "  ✓ Claude Code setup complete"
+fi
+
+# ── 8b. Claude Desktop setup (claude.ai chat app) ───────────────────────────
+CLAUDE_DESKTOP_DIR="$HOME/Library/Application Support/Claude"
+CLAUDE_DESKTOP_CONFIG="$CLAUDE_DESKTOP_DIR/claude_desktop_config.json"
+
+if [ -d "$CLAUDE_DESKTOP_DIR" ]; then
+    echo ""
+    echo "── Claude Desktop detected ──────────────────────────────────────"
+
+    # Use Python to safely merge nora into existing config
+    # Claude Desktop config uses absolute paths — ${HOME} is not expanded
+    "$PYTHON" -c "
+import json, os, sys
+
+config_path = os.path.expanduser('$CLAUDE_DESKTOP_CONFIG')
+python_bin = '$PYTHON'
+nora_mcp = os.path.expanduser('$KERNORA_DIR/app/nora_mcp.py')
+
+config = {}
+try:
+    with open(config_path) as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+
+config.setdefault('mcpServers', {})
+config['mcpServers']['nora'] = {
+    'command': python_bin,
+    'args': [nora_mcp],
+}
+
+with open(config_path, 'w') as f:
+    json.dump(config, f, indent=2)
+
+print('  ✓ Nora registered in Claude Desktop config')
+print('  ! Restart Claude Desktop to load the MCP server')
+" || echo "  ⚠  Could not write Claude Desktop config — update manually:"
+    echo "     $CLAUDE_DESKTOP_CONFIG"
 fi
 
 # ── 9. API key (only needed for BYOK — not Kiro/Cursor) ─────────────────────
@@ -426,3 +487,8 @@ echo "  │  Database   →  ~/.kernora/echo.db                               �
 echo "  │                                                                  │"
 echo "  └──────────────────────────────────────────────────────────────────┘"
 echo ""
+
+# ── Cleanup temp dir if we downloaded files via curl|bash ───────────────────
+if [ "$DOWNLOADED_REPO" = true ] && [ -d "$REPO_DIR" ]; then
+    rm -rf "$REPO_DIR"
+fi

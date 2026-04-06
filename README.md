@@ -20,6 +20,32 @@ Nora bootstraps automatically — creates a Python venv, installs deps, starts t
 curl -fsSL https://raw.githubusercontent.com/kernora-ai/nora/main/install.sh | bash
 ```
 
+The installer registers Nora's MCP server automatically. If you want to add it to an existing Claude Code install manually:
+```bash
+claude mcp add nora ~/.kernora/venv/bin/python3 -- ~/.kernora/app/nora_mcp.py
+```
+
+### Claude Desktop (chat.claude.ai app)
+
+The installer detects Claude Desktop and writes to `~/Library/Application Support/Claude/claude_desktop_config.json` automatically. For manual setup:
+
+```json
+{
+  "mcpServers": {
+    "nora": {
+      "command": "/Users/YOUR_USERNAME/.kernora/venv/bin/python3",
+      "args": ["/Users/YOUR_USERNAME/.kernora/app/nora_mcp.py"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after editing the config.
+
+### Cowork (Claude desktop app)
+
+Install the `nora.plugin` from the [Releases](https://github.com/kernora-ai/nora/releases) page. After Nora is installed locally, the plugin connects Cowork to all 18 MCP tools.
+
 ## What Happens
 
 **Session 1** — You code normally. Nora captures the transcript.

@@ -129,3 +129,15 @@ port = 2742
 - [GitHub: kernora-ai/nora](https://github.com/kernora-ai/nora)
 - [Dashboard](http://localhost:2742)
 - [kernora.ai](https://kernora.ai)
+
+## License and support
+
+This power is licensed under Elastic License 2.0 (Elastic-2.0).
+
+**Privacy Policy**
+
+https://kernora.ai/privacy
+
+**Support**
+
+https://github.com/kernora-ai/nora/issues | hello@kernora.ai
