@@ -578,6 +578,24 @@ def index():
         </div>
         '''
 
+    # Always fetch core stats — these must never be zeroed by leverage errors
+    try:
+        session_count = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+    except Exception:
+        session_count = 0
+    try:
+        pattern_count = db.execute("SELECT COUNT(*) FROM patterns").fetchone()[0]
+    except Exception:
+        pattern_count = 0
+    try:
+        bug_fix_count = db.execute("SELECT COUNT(*) FROM reported_bugs WHERE fix_code != ''").fetchone()[0]
+    except Exception:
+        bug_fix_count = 0
+    try:
+        injections = db.execute("SELECT COUNT(*) FROM nora_metrics WHERE event_type = 'impression' AND created_at > datetime('now', '-7 days')").fetchone()[0]
+    except Exception:
+        injections = 0
+
     try:
         from score_utils import compute_leverage, get_leverage_history
         lev_data = compute_leverage(db)
@@ -585,13 +603,8 @@ def index():
         leverage_label = lev_data["label"]
         leverage_color = lev_data["label_color"]
         
-        session_count = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-        pattern_count = db.execute("SELECT COUNT(*) FROM patterns").fetchone()[0]
-        bug_fix_count = db.execute("SELECT COUNT(*) FROM reported_bugs WHERE fix_code != ''").fetchone()[0]
-        injections = db.execute("SELECT COUNT(*) FROM nora_metrics WHERE event_type = 'impression' AND created_at > datetime('now', '-7 days')").fetchone()[0]
-        
         # 12.5 CAPTURE
-        total_sessions = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        total_sessions = session_count  # already fetched above
         sessions_this_week = db.execute("SELECT COUNT(*) FROM sessions WHERE started_at > datetime('now', '-7 days')").fetchone()[0]
         capture_color = "var(--success)" if sessions_this_week > 0 else "var(--muted)"
         
@@ -661,7 +674,8 @@ def index():
         leverage_color = "#6a8aaa"
         loop_health_card = ""
         trend_text = "—"
-        session_count = pattern_count = bug_fix_count = injections = 0
+        # NOTE: session_count, pattern_count, bug_fix_count, injections are
+        # fetched BEFORE this try block and must NOT be zeroed here.
 
 
     # 13.5 Top Projects
@@ -760,7 +774,7 @@ def index():
     # TASK 6.3 — Two-column layout (Quick Wins left, Recent Activity right)
     try:
         top_patterns = db.execute(
-            "SELECT id, name, effectiveness FROM patterns ORDER BY effectiveness DESC LIMIT 5"
+            "SELECT id, COALESCE(name, pattern) AS name, effectiveness FROM patterns ORDER BY effectiveness DESC LIMIT 5"
         ).fetchall()
     except Exception:
         top_patterns = []
@@ -1079,9 +1093,12 @@ def projects():
         # Cache logic
         cache_key = f"{project}_{c}" # invalidate if run count changes
         if cache_key not in _project_leverage_cache:
-            lev_data = compute_leverage(db, project_filter=project)
+            try:
+                lev_data = compute_leverage(db, project_filter=project)
+            except Exception:
+                lev_data = {"score": None, "label": "—", "label_color": "#6a8aaa", "enough_data": False, "sub_metrics": {}}
             _project_leverage_cache[cache_key] = lev_data
-        
+
         lev = _project_leverage_cache[cache_key]
         score = lev['score'] if lev['score'] else "—"
         color = lev['label_color']
@@ -1203,9 +1220,11 @@ def bugs():
 </div>"""
         return shell("Bugs", empty, "Bugs")
 
-    show_resolved = request.args.get("show_resolved") == "1"
-    status_filter = "" if show_resolved else "WHERE status = 'open'"
-    
+    # Default: show ALL bugs (they're a knowledge library — most are already-resolved anti-patterns).
+    # "Open only" filter lets users see only unresolved issues.
+    open_only = request.args.get("open_only") == "1"
+    status_filter = "WHERE status = 'open'" if open_only else ""
+
     all_bugs = []
     try:
         rb_rows = db.execute(
@@ -1221,9 +1240,9 @@ def bugs():
     except Exception:
         pass
     db.close()
-    
-    toggle_url = "?show_resolved=0" if show_resolved else "?show_resolved=1"
-    toggle_text = "Hide resolved" if show_resolved else "Show resolved"
+
+    toggle_url = "?" if open_only else "?open_only=1"
+    toggle_text = "Show all" if open_only else "Open only"
     header = f"""
     <div style="display:flex; justify-content:flex-end; margin-bottom: 1rem;">
         <a href="/bugs{toggle_url}" hx-get="/bugs{toggle_url}" hx-target="body" hx-push-url="true" style="color:#6a8aaa; font-size:0.8rem; text-decoration:none;">{toggle_text}</a>
@@ -1333,15 +1352,17 @@ def learnings():
     except Exception:
         pass
 
-    # TASK 7.1(c) — Mistakes to Avoid (anti-patterns from insights)
+    # TASK 7.1(c) — Mistakes to Avoid (anti-patterns from reported_bugs)
     mistakes = ""
     try:
-        anti_rows = db.execute(
-            "SELECT summary FROM insights WHERE summary LIKE '%mistake%' OR summary LIKE '%pitfall%' "
-            "ORDER BY id DESC LIMIT 10"
+        bug_rows = db.execute(
+            "SELECT title, severity, fix_code FROM reported_bugs ORDER BY id DESC LIMIT 15"
         ).fetchall()
-        for anti in anti_rows:
-            mistakes += f'<div class="rule" style="border-color:var(--danger);margin-bottom:.5rem">{html.escape(anti[0][:100])}</div>'
+        for b in bug_rows:
+            sev = (b[1] or "medium").lower()
+            sev_color = "var(--danger)" if sev == "high" else "var(--warning)" if sev == "medium" else "var(--info)"
+            fix_note = (" — " + (b[2] or "")[:60]) if b[2] else ""
+            mistakes += f'<div class="rule" style="border-color:{sev_color};margin-bottom:.5rem">{html.escape((b[0] or "")[:100])}{html.escape(fix_note)}</div>'
     except Exception:
         pass
 
