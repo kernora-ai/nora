@@ -29,8 +29,9 @@ Tools:
   nora_inventory           — feature inventory audit (surface area catalog)
   nora_coach               — AI effectiveness coach (prompt quality, anti-patterns, before/after)
   nora_onboard             — first-run codebase tour (language, framework, git activity)
+  nora_ingest              — ingest a Cowork/Chat/Code session transcript into Nora's DB
 
-SECURITY: Read-only access to local echo.db. No writes (except nora_scan for DB seeding).
+SECURITY: Read-only access to local echo.db. No writes (except nora_scan/nora_ingest for DB seeding).
           No network calls beyond MCP stdio.
 """
 
@@ -208,6 +209,40 @@ class NoraServer:
                             },
                         },
                         "required": ["project_path"],
+                    },
+                ),
+                Tool(
+                    name="nora_ingest",
+                    description=(
+                        "Ingest a Cowork, Claude.ai chat, or Claude Code session transcript into Nora's DB. "
+                        "Extracts patterns, decisions, and bugs from free-form session text. "
+                        "Use this to teach Nora about sessions it didn't observe directly. "
+                        "Claude should summarize the session first, then call this tool with the summary. "
+                        "Examples: 'nora ingest this session', 'save this conversation to nora', "
+                        "'nora scan --session current', 'add this chat to nora'."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Short title for this session (e.g. 'Nora plugin build - Apr 5 2026').",
+                            },
+                            "transcript": {
+                                "type": "string",
+                                "description": "The session content to ingest. Can be a full transcript, a summary, or structured notes. "
+                                               "Nora extracts patterns, decisions, and bugs from this text.",
+                            },
+                            "source": {
+                                "type": "string",
+                                "description": "Where the session came from: 'cowork', 'claude-chat', 'claude-code', 'kiro', or 'manual'. Default: 'cowork'.",
+                            },
+                            "project": {
+                                "type": "string",
+                                "description": "Project name or path this session relates to (e.g. 'kernora', '~/jivant-master'). Optional.",
+                            },
+                        },
+                        "required": ["title", "transcript"],
                     },
                 ),
                 # ── LEARNING & PATTERNS ─────────────────────────────────
@@ -473,6 +508,13 @@ class NoraServer:
                     result = self._scan_project(
                         arguments["project_path"],
                         arguments.get("depth", 50),
+                    )
+                elif name == "nora_ingest":
+                    result = self._ingest_session(
+                        arguments["title"],
+                        arguments["transcript"],
+                        arguments.get("source", "cowork"),
+                        arguments.get("project", ""),
                     )
                 elif name == "nora_pe_review":
                     result = self._skill_pe_review(arguments.get("focus"))
@@ -1192,6 +1234,118 @@ class NoraServer:
             imported += 1
 
         return imported
+
+    # ── Session Ingest (Cowork / Chat / Code sessions) ────────────────────────
+
+    def _ingest_session(
+        self,
+        title: str,
+        transcript: str,
+        source: str = "cowork",
+        project: str = "",
+    ) -> str:
+        """Ingest a session transcript and extract patterns, decisions, bugs."""
+        import hashlib
+        import re
+
+        conn = self._connect_db()
+        stats = {"patterns": 0, "decisions": 0, "bugs": 0}
+
+        # Derive a stable session ID from title + source
+        session_id = hashlib.sha256(f"{source}:{title}".encode()).hexdigest()[:16]
+        project_name = project.split("/")[-1] if project else source
+        text = transcript
+
+        with conn:
+            cursor = conn.cursor()
+
+            # ── 1. Store the session itself ──────────────────────────────────
+            turns = [{"role": "transcript", "content": text[:4000]}]
+            cursor.execute(
+                "INSERT OR IGNORE INTO sessions "
+                "(id, project, started_at, ended_at, model, analyzed, turns_json) "
+                "VALUES (?, ?, datetime('now'), datetime('now'), ?, 0, ?)",
+                (session_id, project_name, source, json.dumps(turns))
+            )
+
+            # ── 2. Extract bugs ── lines with error/fix/crash/bug keywords ──
+            bug_patterns = re.compile(
+                r"(?:fix|bug|error|crash|fail|broke|broken|issue|regression|exception|traceback)[^\n]{10,120}",
+                re.IGNORECASE
+            )
+            seen_bugs: set[str] = set()
+            for match in bug_patterns.finditer(text):
+                snippet = match.group(0).strip()[:200]
+                key = snippet[:60].lower()
+                if key in seen_bugs:
+                    continue
+                seen_bugs.add(key)
+                cursor.execute(
+                    "INSERT OR IGNORE INTO reported_bugs "
+                    "(title, severity, status, fix_code, session_id) "
+                    "VALUES (?, ?, 'resolved', ?, ?)",
+                    (snippet, "medium", session_id[:8], session_id)
+                )
+                stats["bugs"] += 1
+                if stats["bugs"] >= 10:
+                    break
+
+            # ── 3. Extract decisions ── "decided to", "chose", "we will" ────
+            decision_patterns = re.compile(
+                r"(?:decided to|chose|choosing|we(?:'ll| will)|switched to|moved to|"
+                r"the approach is|architecture|refactor|migrat)[^\n]{10,150}",
+                re.IGNORECASE
+            )
+            seen_decisions: set[str] = set()
+            for match in decision_patterns.finditer(text):
+                snippet = match.group(0).strip()[:200]
+                key = snippet[:60].lower()
+                if key in seen_decisions:
+                    continue
+                seen_decisions.add(key)
+                cursor.execute(
+                    "INSERT INTO decisions (decision, rationale, project, session_id) "
+                    "VALUES (?, ?, ?, ?)",
+                    (snippet, f"Extracted from {source} session: {title}", project_name, session_id)
+                )
+                stats["decisions"] += 1
+                if stats["decisions"] >= 8:
+                    break
+
+            # ── 4. Extract patterns ── "always", "never", "rule:", "pattern:" ──
+            pattern_texts = re.compile(
+                r"(?:ALWAYS|NEVER|rule:|pattern:|best practice:|convention:|tip:)[^\n]{10,150}",
+                re.IGNORECASE
+            )
+            for match in pattern_texts.finditer(text):
+                snippet = match.group(0).strip()[:200]
+                existing = cursor.execute(
+                    "SELECT 1 FROM patterns WHERE pattern LIKE ?",
+                    (f"%{snippet[:40]}%",)
+                ).fetchone()
+                if not existing:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO patterns "
+                        "(pattern, effectiveness, domains, context) "
+                        "VALUES (?, ?, ?, ?)",
+                        (snippet, 0.7, json.dumps([source, project_name]),
+                         f"Extracted from {source} session")
+                    )
+                    stats["patterns"] += 1
+                    if stats["patterns"] >= 5:
+                        break
+
+        total = stats["bugs"] + stats["decisions"] + stats["patterns"]
+        lines = [
+            f"Ingested session: {title!r}",
+            f"  Source:    {source}",
+            f"  Project:   {project_name}",
+            f"  Extracted: {stats['bugs']} bugs · {stats['decisions']} decisions · {stats['patterns']} patterns",
+            "",
+            f"Total: {total} items added to Nora's DB.",
+            "Run nora_stats to see updated dashboard.",
+        ]
+        return "\n".join(lines)
 
     # ── Skill Tools (structured prompts that guide the AI through audits) ─────
 

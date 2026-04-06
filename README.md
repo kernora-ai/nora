@@ -44,7 +44,7 @@ Restart Claude Desktop after editing the config.
 
 ### Cowork (Claude desktop app)
 
-Install the `nora.plugin` from the [Releases](https://github.com/kernora-ai/nora/releases) page. After Nora is installed locally, the plugin connects Cowork to all 18 MCP tools.
+Install the `nora.plugin` from the [Releases](https://github.com/kernora-ai/nora/releases) page. After Nora is installed locally, the plugin connects Cowork to all 19 MCP tools.
 
 ## What Happens
 
@@ -103,7 +103,7 @@ Your IDE (Kiro / Claude Code / Cursor)
     │     ├── on tool use → track patterns
     │     └── on session start → check steering freshness
     │
-    ├── MCP server (18 tools)
+    ├── MCP server (19 tools)
     │     └── nora_search, nora_patterns, nora_decisions, nora_bugs,
     │         nora_stats, nora_pe_review, nora_coe, nora_retro, ...
     │
@@ -150,7 +150,7 @@ port = 2742
 
 ## MCP Tools
 
-18 tools available to your AI agent:
+19 tools available to your AI agent:
 
 | Tool | What it does |
 |------|-------------|
@@ -163,6 +163,7 @@ port = 2742
 | `nora_scope_validation` | Safety check before multi-file edits |
 | `nora_skills` | Distilled team methodology |
 | `nora_scan` | Seed DB from git history |
+| `nora_ingest` | Ingest Cowork/Chat/Code session transcript |
 | `nora_pe_review` | Principal Engineer 4-tier code audit |
 | `nora_coe` | Blameless root cause investigation (5 whys) |
 | `nora_coe_product` | Product COE — why was this built wrong |

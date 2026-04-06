@@ -55,9 +55,9 @@ Provider priority: IDE LLM → Apple FoundationModels → MLX-LM → BYOK API ke
 
 **Connection:** Local stdio process
 
-Nora's MCP server provides 18 tools for querying your session intelligence. All data stays local in `~/.kernora/echo.db`.
+Nora's MCP server provides 19 tools for querying your session intelligence. All data stays local in `~/.kernora/echo.db`.
 
-**Tools (18):**
+**Tools (19):**
 
 - **nora_search** — Full-text search across patterns, decisions, bugs, and insights
 - **nora_patterns** — List effective coding patterns, optionally filtered by project
@@ -68,6 +68,7 @@ Nora's MCP server provides 18 tools for querying your session intelligence. All 
 - **nora_scope_validation** — Validate execution scope before multi-file edits
 - **nora_skills** — Fetch distilled methodology from your best sessions
 - **nora_scan** — Seed database from git history
+- **nora_ingest** — Ingest a Cowork, Claude.ai chat, or Claude Code session transcript; say "save this session to nora" or "nora scan --session"
 - **nora_pe_review** — Principal Engineer 4-tier code audit
 - **nora_coe** — Blameless root cause investigation (5 whys)
 - **nora_coe_product** — Product COE — why was this built wrong
