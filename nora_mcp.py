@@ -968,7 +968,7 @@ class NoraServer:
                 # Fix patterns → bug entries
                 if any(msg_lower.startswith(p) for p in ["fix:", "fix(", "bugfix:", "hotfix:"]):
                     cursor.execute(
-                        "INSERT INTO reported_bugs (title, severity, status, fix_code, session_id) "
+                        "INSERT OR IGNORE INTO reported_bugs (title, severity, status, fix_code, session_id) "
                         "VALUES (?, ?, 'resolved', ?, ?)",
                         (message[:200], "medium", commit_hash[:8], session_id)
                     )
