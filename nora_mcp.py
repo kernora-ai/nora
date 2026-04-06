@@ -29,6 +29,7 @@ Tools:
   nora_inventory           — feature inventory audit (surface area catalog)
   nora_coach               — AI effectiveness coach (prompt quality, anti-patterns, before/after)
   nora_onboard             — first-run codebase tour (language, framework, git activity)
+  nora_inject              — enhance a prompt with learned patterns/decisions/anti-patterns (3 options)
   nora_ingest              — ingest a Cowork/Chat/Code session transcript into Nora's DB
 
 SECURITY: Read-only access to local echo.db. No writes (except nora_scan/nora_ingest for DB seeding).
@@ -209,6 +210,37 @@ class NoraServer:
                             },
                         },
                         "required": ["project_path"],
+                    },
+                ),
+                Tool(
+                    name="nora_inject",
+                    description=(
+                        "Enhance a prompt with Nora's learned patterns, decisions, and anti-patterns. "
+                        "Returns 3 options: (A) original prompt + injected context, "
+                        "(B) reframed prompt using known best practices, "
+                        "(C) cautious prompt that avoids known anti-patterns. "
+                        "Use before any significant task to leverage accumulated learning. "
+                        "Examples: 'enhance this prompt with nora', 'nora inject', "
+                        "'nora improve my prompt', 'what does nora know about [topic]', "
+                        "'give me options based on what nora learned'."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string",
+                                "description": "The user's original intent or task description to enhance.",
+                            },
+                            "project": {
+                                "type": "string",
+                                "description": "Project context to focus relevance (e.g. 'kernora', 'jivant-master'). Optional.",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Max relevant items to surface per category (default: 5).",
+                            },
+                        },
+                        "required": ["prompt"],
                     },
                 ),
                 Tool(
@@ -508,6 +540,12 @@ class NoraServer:
                     result = self._scan_project(
                         arguments["project_path"],
                         arguments.get("depth", 50),
+                    )
+                elif name == "nora_inject":
+                    result = self._inject_prompt(
+                        arguments["prompt"],
+                        arguments.get("project", ""),
+                        arguments.get("limit", 5),
                     )
                 elif name == "nora_ingest":
                     result = self._ingest_session(
@@ -1234,6 +1272,139 @@ class NoraServer:
             imported += 1
 
         return imported
+
+    # ── Prompt Injection (enhance prompts with learned context) ──────────────
+
+    def _inject_prompt(self, prompt: str, project: str = "", limit: int = 5) -> str:
+        """Enhance a prompt with relevant patterns, decisions, and anti-patterns from DB."""
+        conn = self._connect_db()
+        prompt_lower = prompt.lower()
+
+        # Extract keywords from the prompt (skip stop words)
+        stop = {"the", "a", "an", "to", "and", "or", "for", "in", "of", "is",
+                "it", "this", "that", "with", "on", "at", "by", "from", "my", "i"}
+        keywords = [w for w in prompt_lower.split() if len(w) > 3 and w not in stop][:8]
+
+        patterns, decisions, bugs = [], [], []
+
+        with conn:
+            cursor = conn.cursor()
+
+            # Search patterns
+            for kw in keywords:
+                rows = cursor.execute(
+                    "SELECT pattern, effectiveness, context FROM patterns "
+                    "WHERE lower(pattern) LIKE ? OR lower(context) LIKE ? "
+                    "ORDER BY effectiveness DESC LIMIT ?",
+                    (f"%{kw}%", f"%{kw}%", limit)
+                ).fetchall()
+                for r in rows:
+                    entry = {"pattern": r[0], "effectiveness": r[1], "context": r[2]}
+                    if entry not in patterns:
+                        patterns.append(entry)
+
+            # Search decisions
+            for kw in keywords:
+                rows = cursor.execute(
+                    "SELECT decision, rationale, project FROM decisions "
+                    "WHERE lower(decision) LIKE ? OR lower(rationale) LIKE ? "
+                    "LIMIT ?",
+                    (f"%{kw}%", f"%{kw}%", limit)
+                ).fetchall()
+                for r in rows:
+                    entry = {"decision": r[0], "rationale": r[1], "project": r[2]}
+                    if entry not in decisions:
+                        decisions.append(entry)
+
+            # Search bugs / anti-patterns
+            for kw in keywords:
+                rows = cursor.execute(
+                    "SELECT title, severity, fix_code FROM reported_bugs "
+                    "WHERE lower(title) LIKE ? "
+                    "ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 "
+                    "WHEN 'medium' THEN 3 ELSE 4 END LIMIT ?",
+                    (f"%{kw}%", limit)
+                ).fetchall()
+                for r in rows:
+                    entry = {"title": r[0], "severity": r[1], "fix": r[2]}
+                    if entry not in bugs:
+                        bugs.append(entry)
+
+        # Deduplicate and trim
+        patterns = patterns[:limit]
+        decisions = decisions[:limit]
+        bugs = bugs[:limit]
+
+        has_context = bool(patterns or decisions or bugs)
+
+        lines = ["━━━ NORA PROMPT INJECTION ━━━", f"Original: {prompt}", ""]
+
+        if not has_context:
+            lines += [
+                "No relevant history found for this prompt yet.",
+                "Nora will learn from this session once you ingest it.",
+                "",
+                "── OPTION A (unchanged) ──────────────────",
+                prompt,
+            ]
+            return "\n".join(lines)
+
+        # Build context block
+        ctx_lines = []
+        if patterns:
+            ctx_lines.append("LEARNED PATTERNS:")
+            for p in patterns:
+                eff = f"{p['effectiveness']:.0%}" if p["effectiveness"] else ""
+                ctx_lines.append(f"  • {p['pattern']}" + (f" [{eff}]" if eff else ""))
+        if decisions:
+            ctx_lines.append("PAST DECISIONS:")
+            for d in decisions:
+                ctx_lines.append(f"  • {d['decision']}")
+        if bugs:
+            ctx_lines.append("KNOWN ANTI-PATTERNS (avoid these):")
+            for b in bugs:
+                ctx_lines.append(f"  ⚠ [{b['severity'].upper()}] {b['title']}")
+
+        context_block = "\n".join(ctx_lines)
+
+        # Option A: Original + injected context header
+        lines += [
+            "── OPTION A: Original + Nora context ────",
+            f"Context from Nora:\n{context_block}",
+            "",
+            f"Task: {prompt}",
+            "",
+        ]
+
+        # Option B: Reframed using best practices
+        best_pattern = patterns[0]["pattern"] if patterns else ""
+        best_decision = decisions[0]["decision"] if decisions else ""
+        reframe_hint = best_pattern or best_decision
+        lines += [
+            "── OPTION B: Best-practice reframe ──────",
+        ]
+        if reframe_hint:
+            lines.append(f"(Applying: \"{reframe_hint[:80]}\")")
+        lines += [
+            f"{prompt}",
+            "Approach this using the patterns and conventions Nora has learned:",
+            context_block,
+            "",
+        ]
+
+        # Option C: Cautious — lead with anti-patterns to avoid
+        lines += ["── OPTION C: Anti-pattern guard ─────────"]
+        if bugs:
+            lines.append("Before starting, verify you're NOT doing:")
+            for b in bugs[:3]:
+                lines.append(f"  ✗ {b['title']}")
+        lines += [
+            f"\nThen: {prompt}",
+            "",
+            "━━━ Pick A, B, or C — or say 'use option B' to proceed. ━━━",
+        ]
+
+        return "\n".join(lines)
 
     # ── Session Ingest (Cowork / Chat / Code sessions) ────────────────────────
 
