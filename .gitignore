@@ -32,3 +32,19 @@ kernora-native-mac/.build/
 
 # Hypothesis testing artifacts
 .hypothesis/
+
+# Model weights and adapters — never commit; ship via release artifacts only
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.onnx
+adapters/
+models/
+
+# Local Kernora runtime state (factbook DB, session logs, user config)
+.kernora/
+*.sqlite
+*.sqlite3
+*.db
