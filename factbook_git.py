@@ -30,7 +30,6 @@ import re
 import secrets
 import sqlite3
 import subprocess
-import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
