@@ -170,7 +170,7 @@ port = 2742
 ## Privacy
 
 - **BYOK mode**: analysis runs on YOUR machine with YOUR API key. Zero bytes reach Kernora servers.
-- **Local LLM mode**: analysis runs entirely on-device via Apple Neural Engine. No network calls.
+- **Ollama mode**: analysis runs entirely on your machine via Ollama. No network calls.
 - **Team mode** (coming soon): data syncs to YOUR S3 bucket. Kernora reads via a revocable IAM role you control.
 
 Verify with `tcpdump` during install — the install script includes a network audit.

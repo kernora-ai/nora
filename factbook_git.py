@@ -347,12 +347,18 @@ def _blocking_write_commit(
 ) -> str:
     """Blocking inner write+commit — always called from run_in_executor."""
     with _factbook_lock():
-        # HIGH-5 FIX: Sanitize I/O errors in exception handling
+        # HIGH-5 FIX: Sanitize I/O errors in exception handling.
+        # v2.7.1: atomic tmp+fsync+rename — keeps the async path's
+        # atomicity guarantee in parity with the sync path. Without this,
+        # an event-loop crash mid-write could leave a truncated factbook.
         try:
-            file_path.write_text(
-                json.dumps(data, indent=2, sort_keys=False, ensure_ascii=False),
-                encoding="utf-8"
-            )
+            payload = json.dumps(data, indent=2, sort_keys=False, ensure_ascii=False)
+            tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as _fh:
+                _fh.write(payload)
+                _fh.flush()
+                os.fsync(_fh.fileno())
+            os.replace(tmp_path, file_path)
         except PermissionError:
             raise RuntimeError(
                 f"Permission denied writing factbook file. Check directory permissions: {FACTBOOKS_DIR}"
