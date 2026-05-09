@@ -35,8 +35,8 @@ covers the rest of the project.
 kiro-extension/           — VS Code / Kiro / Cursor extension
   bundled/                — Python engine (dashboard, analyzer, db, hooks)
   src/                    — TypeScript extension code
-kernora-native-mac/       — Swift local LLM server (FoundationModels + MLX-LM)
 docs/                     — Public documentation
+
 ```
 
 ## What We're Looking For

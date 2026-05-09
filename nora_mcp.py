@@ -20,19 +20,12 @@ Tools:
   nora_session             — get details for a specific session
   nora_scope_validation    — validate planned execution scope before multi-file edits
   nora_skills              — fetch distilled methodology from past sessions
-  nora_scan                — scan git history to seed DB on first install
-  nora_pe_review           — principal engineer code audit (4-tier)
-  nora_coe                 — technical COE (blameless root cause investigation)
-  nora_coe_product         — product COE (why was this built wrong)
   nora_retro               — engineering retrospective (git velocity, quality signals)
-  nora_sofac               — factory status (recent commits, pending work, health)
   nora_inventory           — feature inventory audit (surface area catalog)
-  nora_coach               — AI effectiveness coach (prompt quality, anti-patterns, before/after)
+  nora_coach               — prompt-quality signals (sessions analyzed, avg quality, repetitions)
   nora_onboard             — first-run codebase tour (language, framework, git activity)
-  nora_inject              — enhance a prompt with learned patterns/decisions/anti-patterns (3 options)
-  nora_ingest              — ingest a Cowork/Chat/Code session transcript into Nora's DB
 
-SECURITY: Read-only access to local echo.db. No writes (except nora_scan/nora_ingest for DB seeding).
+SECURITY: Read-only access to local echo.db.
           No network calls beyond MCP stdio.
 """
 
@@ -117,27 +110,6 @@ class NoraServer:
                 ),
                 # ── CODE QUALITY ────────────────────────────────────────
                 Tool(
-                    name="nora_pe_review",
-                    description=(
-                        "Run a Principal Engineer code audit on the current project. "
-                        "Produces a 4-tier bug inventory: CRITICAL (security, data integrity, secrets) → "
-                        "HIGH (correctness, error handling, race conditions) → MEDIUM (performance, "
-                        "accessibility, UX) → LOW (style, naming, dead code). Each finding includes "
-                        "file path, line reference, and fix suggestion. "
-                        "Examples: 'nora pe review' (full project), 'nora pe review src/auth/' "
-                        "(focus on auth module), 'nora pe review just the API routes'."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "focus": {
-                                "type": "string",
-                                "description": "Optional focus area. Can be a directory ('src/auth/'), a file ('server.ts'), or a concern ('just check error handling'). If omitted, audits the full project.",
-                            },
-                        },
-                    },
-                ),
-                Tool(
                     name="nora_bugs",
                     description=(
                         "List all known bugs Nora has found — from git history analysis, session analysis, "
@@ -185,96 +157,6 @@ class NoraServer:
                             },
                         },
                         "required": ["intent"],
-                    },
-                ),
-                Tool(
-                    name="nora_scan",
-                    description=(
-                        "Bootstrap Nora with your project's history. Scans git log to extract: "
-                        "sessions (one per commit), patterns (from commit conventions like feat:/fix:/refactor:), "
-                        "architectural decisions (from merge commits and feature branches), and "
-                        "bugs (from fix: commits). Also imports kiro-cli chat sessions if any exist. "
-                        "Run this first after installing Kernora. "
-                        "Examples: 'nora scan ~/code/my-project', 'nora scan . 100' (scan 100 commits)."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "project_path": {
-                                "type": "string",
-                                "description": "Absolute path to the project directory. Must be a git repository. Example: '/Users/mihir/code/kernora' or '~/code/my-app'.",
-                            },
-                            "depth": {
-                                "type": "integer",
-                                "description": "How many recent commits to scan. Default: 50. Use 100-200 for larger projects with more history.",
-                            },
-                        },
-                        "required": ["project_path"],
-                    },
-                ),
-                Tool(
-                    name="nora_inject",
-                    description=(
-                        "Enhance a prompt with Nora's learned patterns, decisions, and anti-patterns. "
-                        "Returns 3 options: (A) original prompt + injected context, "
-                        "(B) reframed prompt using known best practices, "
-                        "(C) cautious prompt that avoids known anti-patterns. "
-                        "Use before any significant task to leverage accumulated learning. "
-                        "Examples: 'enhance this prompt with nora', 'nora inject', "
-                        "'nora improve my prompt', 'what does nora know about [topic]', "
-                        "'give me options based on what nora learned'."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "prompt": {
-                                "type": "string",
-                                "description": "The user's original intent or task description to enhance.",
-                            },
-                            "project": {
-                                "type": "string",
-                                "description": "Project context to focus relevance (e.g. 'kernora', 'jivant-master'). Optional.",
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Max relevant items to surface per category (default: 5).",
-                            },
-                        },
-                        "required": ["prompt"],
-                    },
-                ),
-                Tool(
-                    name="nora_ingest",
-                    description=(
-                        "Ingest a Cowork, Claude.ai chat, or Claude Code session transcript into Nora's DB. "
-                        "Extracts patterns, decisions, and bugs from free-form session text. "
-                        "Use this to teach Nora about sessions it didn't observe directly. "
-                        "Claude should summarize the session first, then call this tool with the summary. "
-                        "Examples: 'nora ingest this session', 'save this conversation to nora', "
-                        "'nora scan --session current', 'add this chat to nora'."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "title": {
-                                "type": "string",
-                                "description": "Short title for this session (e.g. 'Nora plugin build - Apr 5 2026').",
-                            },
-                            "transcript": {
-                                "type": "string",
-                                "description": "The session content to ingest. Can be a full transcript, a summary, or structured notes. "
-                                               "Nora extracts patterns, decisions, and bugs from this text.",
-                            },
-                            "source": {
-                                "type": "string",
-                                "description": "Where the session came from: 'cowork', 'claude-chat', 'claude-code', 'kiro', or 'manual'. Default: 'cowork'.",
-                            },
-                            "project": {
-                                "type": "string",
-                                "description": "Project name or path this session relates to (e.g. 'kernora', '~/jivant-master'). Optional.",
-                            },
-                        },
-                        "required": ["title", "transcript"],
                     },
                 ),
                 # ── LEARNING & PATTERNS ─────────────────────────────────
@@ -357,67 +239,7 @@ class NoraServer:
                         },
                     },
                 ),
-                Tool(
-                    name="nora_coe",
-                    description=(
-                        "Blameless root cause investigation using Amazon's Correction of Errors framework. "
-                        "Nora traces the bug through 5 Whys: (1) What broke → (2) Why that code was wrong → "
-                        "(3) Why it wasn't caught → (4) What process gap allowed it → (5) What systemic "
-                        "fix prevents this class of bug. Uses git blame to build a timeline, checks test "
-                        "coverage, and produces concrete action items with prevention rules. "
-                        "Examples: 'nora coe the upload endpoint returns 500', "
-                        "'nora coe why did auth break after the migration', "
-                        "'coe: dashboard shows stale data after deploy'."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "issue": {
-                                "type": "string",
-                                "description": "Describe what went wrong. Be specific: 'upload endpoint returns 500 on PDF files over 10MB' is better than 'upload is broken'. Include error messages if you have them.",
-                            },
-                        },
-                    },
-                ),
-                Tool(
-                    name="nora_coe_product",
-                    description=(
-                        "Product-level root cause investigation — for when a feature was built wrong, "
-                        "not just when code broke. Traces the decision chain from spec/intent → "
-                        "implementation → what actually shipped. Checks: Was there a spec? Did code match it? "
-                        "Where did the intent get lost? Would the target user understand this? "
-                        "Produces action items: REDESIGN / REMOVE / RENAME / DEFER. "
-                        "Examples: 'nora coe product the onboarding flow is confusing', "
-                        "'nora coe product settings page has features nobody asked for', "
-                        "'why was the export feature built this way'."
-                    ),
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "issue": {
-                                "type": "string",
-                                "description": "Describe the feature or experience that feels wrong. Focus on the user impact: 'users can't find the export button' not 'export button is in the wrong component'.",
-                            },
-                        },
-                    },
-                ),
                 # ── FACTORY & INVENTORY ─────────────────────────────────
-                Tool(
-                    name="nora_sofac",
-                    description=(
-                        "Software Factory (Sofac) health check. Treats your project like a factory floor "
-                        "and checks all production lines: (1) What shipped recently — categorizes last 10 "
-                        "commits as features/fixes/refactors, (2) Pending work — scans for TODO/FIXME/HACK "
-                        "in changed files and uncommitted changes, (3) Self-healing opportunities — bug fixes "
-                        "that should become prevention rules, patterns that could be automated, repeated "
-                        "manual steps that should be scripted, (4) Build/test/lint health — tries to run "
-                        "the project's build and reports GREEN/YELLOW/RED status. "
-                        "Run this at the start of your day or before shipping. "
-                        "Examples: 'nora sofac', 'factory status', 'is the project healthy', "
-                        "'what needs attention before we ship'."
-                    ),
-                    inputSchema={"type": "object", "properties": {}},
-                ),
                 Tool(
                     name="nora_inventory",
                     description=(
@@ -444,7 +266,7 @@ class NoraServer:
                 Tool(
                     name="nora_help",
                     description=(
-                        "Show all 18 Nora tools with descriptions and usage examples. "
+                        "Show all 13 open-core Nora tools with descriptions and usage examples. "
                         "ALWAYS call this tool when the user says 'nora help', 'what can nora do', "
                         "'list nora tools', or 'nora commands'. NEVER generate a help response "
                         "from memory — always call this tool."
@@ -536,34 +358,8 @@ class NoraServer:
                     )
                 elif name == "nora_skills":
                     result = self._skills()
-                elif name == "nora_scan":
-                    result = self._scan_project(
-                        arguments["project_path"],
-                        arguments.get("depth", 50),
-                    )
-                elif name == "nora_inject":
-                    result = self._inject_prompt(
-                        arguments["prompt"],
-                        arguments.get("project", ""),
-                        arguments.get("limit", 5),
-                    )
-                elif name == "nora_ingest":
-                    result = self._ingest_session(
-                        arguments["title"],
-                        arguments["transcript"],
-                        arguments.get("source", "cowork"),
-                        arguments.get("project", ""),
-                    )
-                elif name == "nora_pe_review":
-                    result = self._skill_pe_review(arguments.get("focus"))
-                elif name == "nora_coe":
-                    result = self._skill_coe(arguments.get("issue"))
-                elif name == "nora_coe_product":
-                    result = self._skill_coe_product(arguments.get("issue"))
                 elif name == "nora_retro":
                     result = self._skill_retro(arguments.get("days", 7))
-                elif name == "nora_sofac":
-                    result = self._skill_sofac()
                 elif name == "nora_inventory":
                     result = self._skill_inventory(arguments.get("directory"))
                 elif name == "nora_help":
@@ -995,646 +791,6 @@ class NoraServer:
 
     # ── Project Scanner ────────────────────────────────────────────────────
 
-    def _scan_project(self, project_path: str, depth: int = 50) -> str:
-        """Scan a project's git history to seed the DB with patterns, decisions, sessions."""
-        import subprocess
-        import hashlib
-        from datetime import datetime
-
-        project = Path(project_path).expanduser().resolve()
-        if not project.exists():
-            return f"Project directory not found: {project}"
-        git_dir = project / ".git"
-        if not git_dir.exists():
-            return f"Not a git repository: {project}"
-
-        try:
-            conn = self._connect_db()
-            cursor = conn.cursor()
-            stats = {"sessions": 0, "patterns": 0, "decisions": 0, "bugs": 0}
-
-            # ── 1. Scan git log → create sessions from commits ──────────
-            log_output = subprocess.check_output(
-                ["git", "log", f"-{depth}", "--format=%H|%ai|%s|%an", "--no-merges"],
-                cwd=str(project), timeout=10, text=True
-            ).strip()
-
-            project_name = project.name
-            for line in log_output.splitlines():
-                parts = line.split("|", 3)
-                if len(parts) < 4:
-                    continue
-                commit_hash, date_str, message, author = parts
-                session_id = hashlib.sha256(commit_hash.encode()).hexdigest()[:16]
-
-                # Skip if session already exists
-                existing = cursor.execute(
-                    "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
-                ).fetchone()
-                if existing:
-                    continue
-
-                cursor.execute(
-                    "INSERT INTO sessions (id, project, started_at, ended_at, model, analyzed, turns_json) "
-                    "VALUES (?, ?, ?, ?, ?, 1, ?)",
-                    (session_id, project_name, date_str, date_str, "git-scan",
-                     json.dumps([{"role": "commit", "content": message}]))
-                )
-                stats["sessions"] += 1
-
-                # ── 2. Extract patterns from commit messages ────────────
-                msg_lower = message.lower()
-
-                # Fix patterns → bug entries
-                if any(msg_lower.startswith(p) for p in ["fix:", "fix(", "bugfix:", "hotfix:"]):
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO reported_bugs (title, severity, status, fix_code, session_id) "
-                        "VALUES (?, ?, 'resolved', ?, ?)",
-                        (message[:200], "medium", commit_hash[:8], session_id)
-                    )
-                    stats["bugs"] += 1
-
-                # Feature/refactor → decisions
-                if any(msg_lower.startswith(p) for p in ["feat:", "feat(", "refactor:", "refactor("]):
-                    cursor.execute(
-                        "INSERT INTO decisions (decision, rationale, project, session_id) "
-                        "VALUES (?, ?, ?, ?)",
-                        (message[:200], f"Commit {commit_hash[:8]} by {author}", project_name, session_id)
-                    )
-                    stats["decisions"] += 1
-
-            # ── 3. Extract patterns from file types in recent changes ───
-            try:
-                diff_output = subprocess.check_output(
-                    ["git", "diff", "--stat", f"HEAD~{min(depth, 20)}..HEAD"],
-                    cwd=str(project), timeout=10, text=True
-                ).strip()
-
-                # Count file extensions
-                ext_counts: dict[str, int] = {}
-                for line in diff_output.splitlines():
-                    parts = line.strip().split("|")
-                    if len(parts) >= 2:
-                        fname = parts[0].strip()
-                        ext = Path(fname).suffix
-                        if ext:
-                            ext_counts[ext] = ext_counts.get(ext, 0) + 1
-
-                # Top extensions → language patterns
-                for ext, count in sorted(ext_counts.items(), key=lambda x: -x[1])[:10]:
-                    lang_map = {
-                        ".py": "Python", ".ts": "TypeScript", ".tsx": "React/TSX",
-                        ".js": "JavaScript", ".jsx": "React/JSX", ".swift": "Swift",
-                        ".rs": "Rust", ".go": "Go", ".java": "Java", ".rb": "Ruby",
-                        ".css": "CSS", ".html": "HTML", ".sql": "SQL", ".sh": "Shell",
-                    }
-                    lang = lang_map.get(ext, ext)
-                    effectiveness = min(1.0, count / 20)  # normalize
-
-                    # Skip if pattern already exists
-                    existing = cursor.execute(
-                        "SELECT 1 FROM patterns WHERE pattern LIKE ?",
-                        (f"%{lang}%project%",)
-                    ).fetchone()
-                    if not existing:
-                        cursor.execute(
-                            "INSERT INTO patterns (pattern, effectiveness, domains, context) "
-                            "VALUES (?, ?, ?, ?)",
-                            (f"{lang} project — {count} files changed recently",
-                             effectiveness, json.dumps([lang.lower()]),
-                             f"Active {lang} development in {project_name}")
-                        )
-                        stats["patterns"] += 1
-
-            except subprocess.CalledProcessError:
-                pass  # shallow clone or single commit — skip diff analysis
-
-            # ── 4. Extract conventions from commit message patterns ──────
-            prefixes: dict[str, int] = {}
-            for line in log_output.splitlines():
-                parts = line.split("|", 3)
-                if len(parts) >= 4:
-                    msg = parts[2]
-                    if ":" in msg:
-                        prefix = msg.split(":")[0].strip().lower()
-                        if len(prefix) < 20:
-                            prefixes[prefix] = prefixes.get(prefix, 0) + 1
-
-            for prefix, count in sorted(prefixes.items(), key=lambda x: -x[1])[:5]:
-                if count >= 3:  # only significant conventions
-                    existing = cursor.execute(
-                        "SELECT 1 FROM patterns WHERE pattern LIKE ?",
-                        (f"%{prefix}%convention%",)
-                    ).fetchone()
-                    if not existing:
-                        cursor.execute(
-                            "INSERT INTO patterns (pattern, effectiveness, domains, context) "
-                            "VALUES (?, ?, ?, ?)",
-                            (f"Commit convention: '{prefix}:' prefix ({count} uses)",
-                             min(1.0, count / 10), json.dumps(["git", "conventions"]),
-                             f"Team uses '{prefix}:' commit prefix consistently")
-                        )
-                        stats["patterns"] += 1
-
-            # ── 5. Import kiro-cli chat sessions for this project ──────
-            cli_imported = 0
-            try:
-                cli_imported = self._import_kiro_cli_sessions(cursor, str(project), project_name)
-                stats["cli_sessions"] = cli_imported
-            except Exception as e:
-                pass  # kiro-cli sessions are a bonus, not critical
-
-            conn.commit()
-            conn.close()
-
-            total = sum(stats.values())
-            if total == 0:
-                return f"Project already scanned — no new data to add from {project_name}."
-
-            cli_line = f"  Kiro CLI sessions: {cli_imported}\n" if cli_imported else ""
-            return (
-                f"Scanned {project_name} ({depth} commits):\n\n"
-                f"  Sessions created: {stats['sessions']}\n"
-                f"  Patterns found:   {stats['patterns']}\n"
-                f"  Decisions found:  {stats['decisions']}\n"
-                f"  Bugs found:       {stats['bugs']}\n"
-                f"{cli_line}\n"
-                f"Nora tools (nora_stats, nora_patterns, nora_decisions, nora_bugs) now have data. "
-                f"Run nora_stats to see the dashboard."
-            )
-
-        except FileNotFoundError as e:
-            return str(e)
-        except subprocess.CalledProcessError as e:
-            return f"Git error: {e}"
-        except Exception as e:
-            return f"Scan error: {str(e)}"
-
-    # ── Kiro CLI session import ─────────────────────────────────────────────
-
-    def _import_kiro_cli_sessions(self, cursor, project_path: str, project_name: str) -> int:
-        """Import kiro-cli chat sessions for a project into Nora's DB.
-        kiro-cli stores sessions in platform-specific locations.
-        Returns count of imported sessions."""
-        import subprocess
-        import platform
-
-        # Find kiro-cli session storage directory
-        home = Path.home()
-        candidates = []
-        if platform.system() == "Darwin":
-            candidates = [
-                home / "Library" / "Application Support" / "Kiro" / "sessions",
-                home / "Library" / "Application Support" / "Kiro" / "User" / "sessions",
-                home / ".kiro" / "sessions",
-            ]
-        else:
-            candidates = [
-                home / ".config" / "Kiro" / "sessions",
-                home / ".config" / "kiro" / "sessions",
-                home / ".kiro" / "sessions",
-            ]
-
-        # Also try to list sessions via kiro-cli to get IDs
-        session_ids = []
-        try:
-            output = subprocess.check_output(
-                ["kiro-cli", "chat", "--list-sessions"],
-                cwd=project_path, timeout=5, text=True, stderr=subprocess.DEVNULL
-            ).strip()
-            for line in output.splitlines():
-                if "Chat SessionId:" in line:
-                    sid = line.split("Chat SessionId:")[1].strip()
-                    session_ids.append(sid)
-        except Exception:
-            pass
-
-        if not session_ids:
-            return 0
-
-        # Try to find and import session files
-        imported = 0
-        session_dir = None
-        for d in candidates:
-            if d.exists() and d.is_dir():
-                session_dir = d
-                break
-
-        # Also search more broadly if not found in standard locations
-        if not session_dir:
-            try:
-                # Search in Kiro's app support dirs
-                result = subprocess.check_output(
-                    ["find", str(home / "Library" / "Application Support"),
-                     "-path", "*kiro*session*", "-type", "d", "-maxdepth", "5"],
-                    timeout=5, text=True, stderr=subprocess.DEVNULL
-                ).strip()
-                for line in result.splitlines():
-                    p = Path(line)
-                    if p.is_dir():
-                        session_dir = p
-                        break
-            except Exception:
-                pass
-
-        for sid in session_ids:
-            # Skip if already imported
-            existing = cursor.execute(
-                "SELECT 1 FROM sessions WHERE id = ?", (sid[:16],)
-            ).fetchone()
-            if existing:
-                continue
-
-            # Try to read the session file
-            turns_json = json.dumps([{"role": "cli", "content": f"kiro-cli session {sid[:8]}"}])
-            if session_dir:
-                for ext in [".json", ".jsonl", ""]:
-                    fpath = session_dir / f"{sid}{ext}"
-                    if fpath.exists():
-                        try:
-                            content = fpath.read_text()
-                            if ext == ".jsonl":
-                                lines = [json.loads(l) for l in content.splitlines() if l.strip()]
-                                turns_json = json.dumps(lines[:50])  # cap at 50 turns
-                            else:
-                                data = json.loads(content)
-                                messages = data.get("messages", data.get("turns", []))
-                                turns_json = json.dumps(messages[:50])
-                        except Exception:
-                            pass
-                        break
-
-            cursor.execute(
-                "INSERT INTO sessions (id, project, started_at, ended_at, model, analyzed, turns_json) "
-                "VALUES (?, ?, datetime('now'), datetime('now'), 'kiro-cli', 0, ?)",
-                (sid[:16], project_name, turns_json)
-            )
-            imported += 1
-
-        return imported
-
-    # ── Prompt Injection (enhance prompts with learned context) ──────────────
-
-    def _inject_prompt(self, prompt: str, project: str = "", limit: int = 5) -> str:
-        """Enhance a prompt with relevant patterns, decisions, and anti-patterns from DB."""
-        conn = self._connect_db()
-        prompt_lower = prompt.lower()
-
-        # Extract keywords from the prompt (skip stop words)
-        stop = {"the", "a", "an", "to", "and", "or", "for", "in", "of", "is",
-                "it", "this", "that", "with", "on", "at", "by", "from", "my", "i"}
-        keywords = [w for w in prompt_lower.split() if len(w) > 3 and w not in stop][:8]
-
-        patterns, decisions, bugs = [], [], []
-
-        with conn:
-            cursor = conn.cursor()
-
-            # Search patterns
-            for kw in keywords:
-                rows = cursor.execute(
-                    "SELECT pattern, effectiveness, context FROM patterns "
-                    "WHERE lower(pattern) LIKE ? OR lower(context) LIKE ? "
-                    "ORDER BY effectiveness DESC LIMIT ?",
-                    (f"%{kw}%", f"%{kw}%", limit)
-                ).fetchall()
-                for r in rows:
-                    entry = {"pattern": r[0], "effectiveness": r[1], "context": r[2]}
-                    if entry not in patterns:
-                        patterns.append(entry)
-
-            # Search decisions
-            for kw in keywords:
-                rows = cursor.execute(
-                    "SELECT decision, rationale, project FROM decisions "
-                    "WHERE lower(decision) LIKE ? OR lower(rationale) LIKE ? "
-                    "LIMIT ?",
-                    (f"%{kw}%", f"%{kw}%", limit)
-                ).fetchall()
-                for r in rows:
-                    entry = {"decision": r[0], "rationale": r[1], "project": r[2]}
-                    if entry not in decisions:
-                        decisions.append(entry)
-
-            # Search bugs / anti-patterns
-            for kw in keywords:
-                rows = cursor.execute(
-                    "SELECT title, severity, fix_code FROM reported_bugs "
-                    "WHERE lower(title) LIKE ? "
-                    "ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 "
-                    "WHEN 'medium' THEN 3 ELSE 4 END LIMIT ?",
-                    (f"%{kw}%", limit)
-                ).fetchall()
-                for r in rows:
-                    entry = {"title": r[0], "severity": r[1], "fix": r[2]}
-                    if entry not in bugs:
-                        bugs.append(entry)
-
-        # Deduplicate and trim
-        patterns = patterns[:limit]
-        decisions = decisions[:limit]
-        bugs = bugs[:limit]
-
-        has_context = bool(patterns or decisions or bugs)
-
-        lines = ["━━━ NORA PROMPT INJECTION ━━━", f"Original: {prompt}", ""]
-
-        if not has_context:
-            lines += [
-                "No relevant history found for this prompt yet.",
-                "Nora will learn from this session once you ingest it.",
-                "",
-                "── OPTION A (unchanged) ──────────────────",
-                prompt,
-            ]
-            return "\n".join(lines)
-
-        # Build context block
-        ctx_lines = []
-        if patterns:
-            ctx_lines.append("LEARNED PATTERNS:")
-            for p in patterns:
-                eff = f"{p['effectiveness']:.0%}" if p["effectiveness"] else ""
-                ctx_lines.append(f"  • {p['pattern']}" + (f" [{eff}]" if eff else ""))
-        if decisions:
-            ctx_lines.append("PAST DECISIONS:")
-            for d in decisions:
-                ctx_lines.append(f"  • {d['decision']}")
-        if bugs:
-            ctx_lines.append("KNOWN ANTI-PATTERNS (avoid these):")
-            for b in bugs:
-                ctx_lines.append(f"  ⚠ [{b['severity'].upper()}] {b['title']}")
-
-        context_block = "\n".join(ctx_lines)
-
-        # Option A: Original + injected context header
-        lines += [
-            "── OPTION A: Original + Nora context ────",
-            f"Context from Nora:\n{context_block}",
-            "",
-            f"Task: {prompt}",
-            "",
-        ]
-
-        # Option B: Reframed using best practices
-        best_pattern = patterns[0]["pattern"] if patterns else ""
-        best_decision = decisions[0]["decision"] if decisions else ""
-        reframe_hint = best_pattern or best_decision
-        lines += [
-            "── OPTION B: Best-practice reframe ──────",
-        ]
-        if reframe_hint:
-            lines.append(f"(Applying: \"{reframe_hint[:80]}\")")
-        lines += [
-            f"{prompt}",
-            "Approach this using the patterns and conventions Nora has learned:",
-            context_block,
-            "",
-        ]
-
-        # Option C: Cautious — lead with anti-patterns to avoid
-        lines += ["── OPTION C: Anti-pattern guard ─────────"]
-        if bugs:
-            lines.append("Before starting, verify you're NOT doing:")
-            for b in bugs[:3]:
-                lines.append(f"  ✗ {b['title']}")
-        lines += [
-            f"\nThen: {prompt}",
-            "",
-            "━━━ Pick A, B, or C — or say 'use option B' to proceed. ━━━",
-        ]
-
-        return "\n".join(lines)
-
-    # ── Session Ingest (Cowork / Chat / Code sessions) ────────────────────────
-
-    def _ingest_session(
-        self,
-        title: str,
-        transcript: str,
-        source: str = "cowork",
-        project: str = "",
-    ) -> str:
-        """Ingest a session transcript and extract patterns, decisions, bugs."""
-        import hashlib
-        import re
-
-        conn = self._connect_db()
-        stats = {"patterns": 0, "decisions": 0, "bugs": 0}
-
-        # Derive a stable session ID from title + source
-        session_id = hashlib.sha256(f"{source}:{title}".encode()).hexdigest()[:16]
-        project_name = project.split("/")[-1] if project else source
-        text = transcript
-
-        with conn:
-            cursor = conn.cursor()
-
-            # ── 1. Store the session itself ──────────────────────────────────
-            turns = [{"role": "transcript", "content": text[:4000]}]
-            cursor.execute(
-                "INSERT OR IGNORE INTO sessions "
-                "(id, project, started_at, ended_at, model, analyzed, turns_json) "
-                "VALUES (?, ?, datetime('now'), datetime('now'), ?, 0, ?)",
-                (session_id, project_name, source, json.dumps(turns))
-            )
-
-            # ── 2. Extract bugs ── lines with error/fix/crash/bug keywords ──
-            bug_patterns = re.compile(
-                r"(?:fix|bug|error|crash|fail|broke|broken|issue|regression|exception|traceback)[^\n]{10,120}",
-                re.IGNORECASE
-            )
-            seen_bugs: set[str] = set()
-            for match in bug_patterns.finditer(text):
-                snippet = match.group(0).strip()[:200]
-                key = snippet[:60].lower()
-                if key in seen_bugs:
-                    continue
-                seen_bugs.add(key)
-                cursor.execute(
-                    "INSERT OR IGNORE INTO reported_bugs "
-                    "(title, severity, status, fix_code, session_id) "
-                    "VALUES (?, ?, 'resolved', ?, ?)",
-                    (snippet, "medium", session_id[:8], session_id)
-                )
-                stats["bugs"] += 1
-                if stats["bugs"] >= 10:
-                    break
-
-            # ── 3. Extract decisions ── "decided to", "chose", "we will" ────
-            decision_patterns = re.compile(
-                r"(?:decided to|chose|choosing|we(?:'ll| will)|switched to|moved to|"
-                r"the approach is|architecture|refactor|migrat)[^\n]{10,150}",
-                re.IGNORECASE
-            )
-            seen_decisions: set[str] = set()
-            for match in decision_patterns.finditer(text):
-                snippet = match.group(0).strip()[:200]
-                key = snippet[:60].lower()
-                if key in seen_decisions:
-                    continue
-                seen_decisions.add(key)
-                cursor.execute(
-                    "INSERT INTO decisions (decision, rationale, project, session_id) "
-                    "VALUES (?, ?, ?, ?)",
-                    (snippet, f"Extracted from {source} session: {title}", project_name, session_id)
-                )
-                stats["decisions"] += 1
-                if stats["decisions"] >= 8:
-                    break
-
-            # ── 4. Extract patterns ── "always", "never", "rule:", "pattern:" ──
-            pattern_texts = re.compile(
-                r"(?:ALWAYS|NEVER|rule:|pattern:|best practice:|convention:|tip:)[^\n]{10,150}",
-                re.IGNORECASE
-            )
-            for match in pattern_texts.finditer(text):
-                snippet = match.group(0).strip()[:200]
-                existing = cursor.execute(
-                    "SELECT 1 FROM patterns WHERE pattern LIKE ?",
-                    (f"%{snippet[:40]}%",)
-                ).fetchone()
-                if not existing:
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO patterns "
-                        "(pattern, effectiveness, domains, context) "
-                        "VALUES (?, ?, ?, ?)",
-                        (snippet, 0.7, json.dumps([source, project_name]),
-                         f"Extracted from {source} session")
-                    )
-                    stats["patterns"] += 1
-                    if stats["patterns"] >= 5:
-                        break
-
-        total = stats["bugs"] + stats["decisions"] + stats["patterns"]
-        lines = [
-            f"Ingested session: {title!r}",
-            f"  Source:    {source}",
-            f"  Project:   {project_name}",
-            f"  Extracted: {stats['bugs']} bugs · {stats['decisions']} decisions · {stats['patterns']} patterns",
-            "",
-            f"Total: {total} items added to Nora's DB.",
-            "Run nora_stats to see updated dashboard.",
-        ]
-        return "\n".join(lines)
-
-    # ── Skill Tools (structured prompts that guide the AI through audits) ─────
-
-    def _skill_pe_review(self, focus: str | None = None) -> str:
-        """Principal Engineer code audit — 4-tier review."""
-        prompt = """🟢 Nora · Kernora: PE Code Review
-
-Run a Principal Engineer code audit on this project. This is a 4-tier review:
-
-**CRITICAL** — Security, data integrity, compliance
-  - Hardcoded secrets or credentials
-  - SQL injection / path traversal / XSS vectors
-  - Unvalidated user input in security-sensitive paths
-  - Missing authentication/authorization checks
-
-**HIGH** — Correctness, idempotency, error handling
-  - Async methods without try/catch
-  - Silent failures (catch blocks that swallow errors)
-  - Race conditions in concurrent code
-  - Missing input validation on public APIs
-
-**MEDIUM** — Performance, accessibility, UX
-  - N+1 queries, unbounded loops, missing pagination
-  - Missing loading/error states in UI
-  - Accessibility violations (missing labels, low contrast)
-
-**LOW** — Code style, naming, hygiene
-  - Dead code and unused imports
-  - Inconsistent naming conventions
-  - Missing documentation on public interfaces
-  - Duplicate type definitions
-
-PROCESS:
-1. Discovery — scan the codebase structure, identify key files
-2. Tier 1 audit — grep for CRITICAL patterns (secrets, injection, auth gaps)
-3. Tier 2 audit — review error handling, async safety, input validation
-4. Tier 3 audit — check performance patterns, UI states
-5. Tier 4 audit — code style, naming, dead code
-6. Report — produce a tiered bug inventory with file:line references
-7. Verdict — PASS / CONDITIONAL PASS / FAIL with required fixes"""
-
-        if focus:
-            prompt += f"\n\nFOCUS AREA: {focus}"
-        else:
-            prompt += "\n\nScan the full project. Start with Phase 1: Discovery."
-
-        return prompt
-
-    def _skill_coe(self, issue: str | None = None) -> str:
-        """Technical COE — blameless root cause investigation."""
-        prompt = """🟢 Nora · Kernora: Technical COE (Correction of Errors)
-
-Run a blameless root cause investigation. The goal is to find systemic causes and prevent recurrence — not assign blame.
-
-**Phase 1: Impact** — What did the user/developer experience? Quantify if possible.
-**Phase 2: Timeline** — When was this introduced? Trace via git log/blame.
-**Phase 2.5: Data Collection** — Gather evidence from:
-  - Server logs / error messages
-  - Code path trace (function → function → failure point)
-  - Git history (when the breaking change was introduced)
-  - Test coverage (does a test cover this path?)
-**Phase 3: 5 Whys** — Each "why" produces a finding. Each finding produces an action item.
-  - Why 1: What was the immediate cause?
-  - Why 2: Why did that happen?
-  - Why 3: Why wasn't this caught?
-  - Why 4: Why don't we have a test/process for this?
-  - Why 5: What systemic gap allowed this class of bug?
-**Phase 4: Action Items** — For each finding:
-  - CODE FIX: specific file + change needed
-  - PROCESS FIX: new rule, test, or check to prevent recurrence
-  - MONITORING: what alert/metric would catch this earlier
-**Phase 5: Prevention Rules** — New rules that prevent this entire CLASS of bug.
-
-RULES:
-- Every finding must cite its data source (code trace / git log / ASSUMPTION)
-- If a finding is based on assumption, flag it explicitly
-- Action items must have clear done-when criteria"""
-
-        if issue:
-            prompt += f"\n\nISSUE TO INVESTIGATE: {issue}\n\nStart with Phase 1: Impact assessment."
-        else:
-            prompt += "\n\nDescribe the bug, crash, or regression and I'll trace it."
-
-        return prompt
-
-    def _skill_coe_product(self, issue: str | None = None) -> str:
-        """Product COE — why was this built wrong."""
-        prompt = """🟢 Nora · Kernora: Product COE
-
-Investigate why a feature was built wrong, scoped incorrectly, or doesn't match user expectations.
-
-**Phase 1: User Impact** — What is the user experiencing? What did they expect?
-**Phase 2: Decision Chain** — Trace from spec → implementation → what shipped.
-  - Was there a spec/PRD? Does the code match it?
-  - If no spec, what was the verbal/implied requirement?
-  - Where did the implementation diverge from intent?
-**Phase 3: 5 Whys (Product)** — Why was this decision made?
-  - Why 1: What was the immediate implementation choice?
-  - Why 2: Why was this approach chosen over alternatives?
-  - Why 3: Was there a miscommunication or missing context?
-  - Why 4: Why didn't review catch the mismatch?
-  - Why 5: What process gap allows this class of product error?
-**Phase 4: Principle Check** — Does this match the product vision?
-  - Would the target user understand this?
-  - Does it match the stated product positioning?
-**Phase 5: Action Items** — For each finding:
-  - REDESIGN: new UX/flow needed
-  - REMOVE: feature should be cut
-  - RENAME: misleading labels/copy
-  - DEFER: not wrong, just premature"""
-
-        if issue:
-            prompt += f"\n\nFEATURE/EXPERIENCE TO INVESTIGATE: {issue}\n\nStart with Phase 1."
-        else:
-            prompt += "\n\nWhat feature or experience feels wrong? I'll trace the decision chain."
-
-        return prompt
-
     def _skill_retro(self, days: int = 7) -> str:
         """Engineering retrospective."""
         return f"""🟢 Nora · Kernora: Engineering Retrospective
@@ -1671,36 +827,6 @@ PROCESS:
 2. Categorize commits by prefix (feat, fix, refactor, chore, docs)
 3. Identify hotspot files from `git log --since="{days} days ago" --name-only`
 4. Produce the retro report with specific numbers and file references"""
-
-    def _skill_sofac(self) -> str:
-        """Factory status check."""
-        return """🟢 Nora · Kernora: Factory Status (Sofac)
-
-Check factory health across all dimensions:
-
-**1. Recent Commits** — What shipped in the last session/day?
-  - Run `git log -10 --oneline` and categorize
-
-**2. Pending Work** — Any queued tasks or blocked items?
-  - Check for TODO/FIXME/HACK in recently changed files
-  - Check for uncommitted changes (`git status`)
-
-**3. Self-Healing Opportunities**
-  - Bug fixes that should generate prevention rules
-  - Patterns that could be automated
-  - Repeated manual steps that should be scripted
-
-**4. Health Check**
-  - Build status: does the project compile/build clean?
-  - Test status: do tests pass?
-  - Lint status: any new warnings?
-
-PROCESS:
-1. `git log -10 --oneline` — recent activity
-2. `git status` — uncommitted work
-3. `grep -rn "TODO\\|FIXME\\|HACK" --include="*.py" --include="*.ts" --include="*.swift" .` — pending items
-4. Try build command if identifiable (npm build, cargo build, swift build, etc.)
-5. Report factory status: GREEN / YELLOW / RED"""
 
     def _skill_inventory(self, directory: str | None = None) -> str:
         """Feature inventory audit."""
@@ -1805,14 +931,15 @@ For each feature, report:
         avg_words = int(overall["avg_words"] or 0)
         total_reps = overall["total_repetitions"] or 0
 
-        # Calculate AI Leverage (maps prompt quality 0.0-1.0 to leverage multiplier 1.5x-5.0x)
-        leverage = round(1.5 + (avg_q * 3.5), 1)
-        leverage_lbl = ("Excellent" if leverage >= 4.5 else
-                        "Strong" if leverage >= 4.0 else
-                        "Developing" if leverage >= 3.3 else "Early Stage")
+        # Open-core coach: report the underlying signals (prompt quality
+        # average, session count, word count, repetition count). Build
+        # your own composite from these inputs if a single-number
+        # display is wanted.
+        quality_lbl = ("Excellent" if avg_q >= 0.9 else
+                       "Strong" if avg_q >= 0.7 else
+                       "Developing" if avg_q >= 0.5 else "Early Stage")
 
-        lines.append(f"## AI Leverage: {leverage}x ({leverage_lbl})")
-        lines.append(f"You're generating **{leverage}x** more value per token than the baseline.")
+        lines.append(f"## Prompt quality: {avg_q:.2f} ({quality_lbl})")
         lines.append(f"  • {total} sessions analyzed  •  avg {avg_words} words/prompt  •  {total_reps} repeated instructions")
         lines.append("")
 
@@ -1884,23 +1011,21 @@ For each feature, report:
             except (_json.JSONDecodeError, TypeError):
                 pass
 
-        lines.append("## How to Increase Your Leverage")
+        lines.append("## How to improve your prompt quality")
         lines.append("")
-        if leverage < 2.6:
+        if avg_q < 0.5:
             tip = ("Your prompts are getting basic AI responses. Biggest quick win: include the file path "
-                   "and line number when discussing code. This alone typically adds +0.8x leverage.")
-        elif leverage < 3.3:
-            tip = ("You're past the basics. Next level: paste error messages verbatim instead of "
-                   "describing them, and specify the output format you want. Targets +3.3x leverage.")
-        elif leverage < 4.0:
-            tip = ("Strong leverage. To reach the top tier: give the AI your mental model of the "
-                   "problem before asking for a solution. Specify constraints upfront. Target: 4.0x+")
-        elif leverage < 4.5:
-            tip = ("You're in the top quartile. Fine-tune by referencing specific function names, "
-                   "giving the AI your last attempt when retrying, and asking for explanations.")
+                   "and line number when discussing code, and paste error messages verbatim instead of "
+                   "describing them.")
+        elif avg_q < 0.7:
+            tip = ("You're past the basics. Next level: specify the output format you want; give the AI "
+                   "your mental model of the problem before asking for a solution; state constraints upfront.")
+        elif avg_q < 0.9:
+            tip = ("Strong prompt quality. Fine-tune by referencing specific function names, giving the AI "
+                   "your last attempt when retrying, and asking for explanations alongside fixes.")
         else:
-            tip = ("Top tier. Your prompts are specific, contextual, and well-structured. "
-                   "You're getting maximum ROI from your AI spend.")
+            tip = ("Top-tier prompts: specific, contextual, well-structured. Keep iterating on the "
+                   "patterns nora_patterns surfaces from your best sessions.")
         lines.append(tip)
 
         if pattern_counts.get("repeated_instruction", 0) > 3:
@@ -2008,29 +1133,28 @@ For each feature, report:
 
         # Next steps
         lines.append("## Recommended Next Steps")
-        lines.append(f"1. **`nora scan {os.path.abspath(target)}`** — import git history (run once)")
-        lines.append("2. **`nora sofac`** — check project health")
-        lines.append("3. **`nora patterns`** — see effective patterns learned")
-        lines.append("4. **`nora bugs`** — see known issues")
+        lines.append("1. **`nora stats`** — see what Nora has captured so far")
+        lines.append("2. **`nora patterns`** — see effective patterns learned")
+        lines.append("3. **`nora bugs`** — see known issues")
         lines.append("")
-        lines.append("After a few sessions: **`nora coach`** to track your AI effectiveness.")
+        lines.append("After a few sessions: **`nora coach`** to track your prompt-quality signals.")
         return "\n".join(lines)
 
     def _help(self) -> str:
-        """Canonical list of all Nora tools — guaranteed complete."""
+        """Canonical list of all open-core Nora tools — guaranteed complete."""
         import os
         ide = os.environ.get("KERNORA_IDE", "").lower()
         if not ide and os.environ.get("ANTIGRAVITY_AGENT"):
             ide = "antigravity"
-        
+
         if "antigravity" in ide:
             header = "◎ kernora.ai Antigravity and LLM configured to Gemini 3.1 Pro (High) as it is for the Antigravity IDE default selected"
         else:
-            header = "🟢 Nora · Kernora — All Available Tools (18)"
+            header = "🟢 Nora · Kernora — Open-Core Tools (13)"
 
         return f"""{header}
 
-━━━ SEARCH & RECALL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ SEARCH & RECALL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   nora search <query>
     Grep for your institutional knowledge. Searches sessions, patterns,
@@ -2046,17 +1170,8 @@ For each feature, report:
   nora stats
     Dashboard overview: sessions scanned, patterns found, bugs tracked,
     tokens spent, LLM analysis status. Quick health check.
-    Example:  "nora stats"  or  "how much has nora learned"
 
-━━━ CODE QUALITY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  nora pe review [focus]
-    Principal Engineer code audit — 4 tiers:
-    CRITICAL (security, secrets) → HIGH (correctness, error handling) →
-    MEDIUM (performance, a11y) → LOW (style, dead code).
-    Each finding has file:line + fix suggestion.
-    Examples: "nora pe review"            (full project)
-              "nora pe review src/auth/"  (just auth module)
+━━━ CODE SAFETY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   nora bugs [status] [severity]
     All known bugs — from git history, session analysis, manual reports.
@@ -2067,35 +1182,20 @@ For each feature, report:
   nora scope <intent>
     Safety check before large changes. Warns if touching >6 files or
     attempting a big-bang rewrite. Injects relevant patterns from history.
-    Called automatically by the AI before multi-file edits.
-    Example:  "nora scope refactor auth to use JWT"
-
-  nora scan <path> [depth]
-    Bootstrap Nora from git history. Run this FIRST after installing.
-    Extracts sessions, patterns, decisions, and bugs from commits.
-    Also imports kiro-cli chat sessions if they exist.
-    Examples: "nora scan ~/code/my-project"      (last 50 commits)
-              "nora scan ~/code/my-project 200"  (last 200 commits)
 
 ━━━ LEARNING & PATTERNS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   nora patterns [project]
-    Effective coding patterns learned from your sessions. Each has an
-    effectiveness score (0-1) and context for when to apply it.
-    Examples: "nora patterns"                 (all projects)
-              "nora patterns ~/code/my-app"   (one project)
-              "what patterns has nora found"
+    Effective coding patterns learned from your sessions, with
+    effectiveness scores.
 
   nora decisions [project]
     Architectural decisions recorded across your projects — the choice,
     rationale, and alternatives considered.
-    Examples: "nora decisions"
-              "what architectural decisions have I made"
 
   nora skills
     Your team playbook — engineering rules + known bug patterns distilled
-    from your best sessions. Grows automatically as Nora analyzes more.
-    Examples: "nora skills"  or  "show me the team playbook"
+    from your best sessions.
 
 ━━━ INVESTIGATION & RETRO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -2104,58 +1204,22 @@ For each feature, report:
     signals, bug ratio, hotspot files, wins and risks.
     Examples: "nora retro"     (last 7 days)
               "nora retro 30"  (last month)
-              "how did we do this sprint"
 
-  nora coe <issue>
-    Blameless root cause investigation (Amazon COE framework). Traces
-    through 5 Whys, builds timeline from git blame, produces action
-    items and prevention rules.
-    Examples: "nora coe the upload endpoint returns 500"
-              "nora coe why did auth break after the migration"
-
-  nora coe product <issue>
-    Product-level investigation — why a feature was built wrong, not
-    just why code broke. Traces spec → implementation → what shipped.
-    Produces: REDESIGN / REMOVE / RENAME / DEFER recommendations.
-    Examples: "nora coe product onboarding is confusing"
-              "nora coe product why was export built this way"
-
-━━━ AI COACHING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ COACH & ONBOARD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   nora coach [days]
-    Your personal AI effectiveness trainer. Shows prompt quality trend,
-    identifies your most common anti-patterns, and gives concrete
-    before/after examples from YOUR OWN sessions.
-    Examples: "nora coach"         (last 30 days)
-              "nora coach 90"      (last quarter)
-              "how can I prompt better"
+    Prompt-quality signals (sessions analyzed, avg quality, repetitions)
+    plus tips on improving your prompts.
 
   nora onboard [dir]
     First-run codebase tour. Identifies language, framework, key files,
     test coverage, and recent git activity.
-    Examples: "nora onboard"              (current directory)
-              "nora onboard ~/code/api"   (specific project)
-              "what is this codebase"
 
-━━━ FACTORY & INVENTORY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  nora sofac
-    Software Factory health check. Treats your project like a factory:
-    (1) What shipped — categorizes recent commits
-    (2) Pending work — TODOs, FIXMEs, uncommitted changes
-    (3) Self-healing — bug fixes that should become rules, manual steps
-        that should be automated
-    (4) Build health — GREEN / YELLOW / RED
-    Run at start of day or before shipping.
-    Examples: "nora sofac"  or  "is the project healthy"
+━━━ INVENTORY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   nora inventory [dir]
-    Feature inventory — walks every screen/page/endpoint and categorizes:
-    SHIP (ready) / POLISH (needs work) / WIRE (UI only) / BLOCKER /
-    GATE (flagged) / NEW (not built). Produces pre-launch checklist.
-    Examples: "nora inventory"              (full project)
-              "nora inventory src/app/"     (specific area)
-              "what features are ready to ship"
+    Feature inventory — categorizes screens/pages/endpoints as
+    SHIP / POLISH / WIRE / BLOCKER / GATE / NEW.
 
 ━━━ META ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -2163,14 +1227,13 @@ For each feature, report:
     This list. Also try: "what can nora do" or "nora commands"
 
 ━━━ QUICK START ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Just installed?     → nora onboard, then nora scan ~/code/your-project
-  Start of day        → nora stats, nora sofac
-  Before code review  → nora pe review
-  Something broke     → nora coe <describe the issue>
+  Just installed?     → nora onboard
+  Start of day        → nora stats
   Sprint end          → nora retro
   Before release      → nora inventory
   Learning from work  → nora patterns, nora skills
-  Want to improve?    → nora coach"""
+  Want to improve?    → nora coach
+"""
 
     async def run(self):
         """Start the MCP server on stdio."""

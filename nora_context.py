@@ -414,7 +414,7 @@ NORA_HELP_TEXT = """
 
   "nora inventory"                     → Feature inventory audit
 
-── MCP Tools (18 tools for your AI agent) ───────────
+── MCP Tools (13 open-core tools for your AI agent) ───────────
   nora_search    → full-text search across all learnings
   nora_patterns  → effective coding patterns
   nora_decisions → architectural decisions
@@ -423,14 +423,9 @@ NORA_HELP_TEXT = """
   nora_session   → detailed session data by ID
   nora_skills    → distilled methodologies
   nora_scope_validation → scope check before multi-file edits
-  nora_scan      → seed DB from git history (first install)
-  nora_pe_review → Principal Engineer 4-tier code audit
-  nora_coe       → blameless 5-whys root cause investigation
-  nora_coe_product → product COE — why was this built wrong
   nora_retro     → engineering retrospective with git velocity
-  nora_sofac     → factory health status
   nora_inventory → feature audit: SHIP/POLISH/WIRE/BLOCKER
-  nora_coach     → AI leverage coaching session
+  nora_coach     → prompt-quality signals
   nora_onboard   → onboard a new developer with Nora context
   nora_help      → this list
 

@@ -35,8 +35,8 @@ Key systemic flows include:
 - **Decision Traces**: Extracted completely out-of-band via `trace_parser.py` within the analyzer loop (never blocking).
 - **AI Leverage Score**: Derived via `score_utils.py` mapping automated tool executions against manual baselines.
 - **Project-Level Intelligence**: Metrics, activity, and scoring are globally tracked but filterable by contextual active project URIs.
-- **Local Native LLM**: Complete Apple FoundationModels and MLX bridging (`kernora-native-mac` probing across TCP 2744/2745).
-- **Tool Ecosystem**: Now providing 18 MCP Tools out of the box dynamically via `nora_mcp.py`.
+- **Local LLM**: Uses BYOK API keys or local Ollama for analysis.
+- **Tool Ecosystem**: Provides 13 MCP tools via `nora_mcp.py`.
 
 ## Mode A — BYOK Solo
 
