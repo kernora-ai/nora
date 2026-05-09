@@ -84,7 +84,7 @@ Nora's MCP server provides 13 tools (open core) for querying your session intell
 ## Privacy
 
 - Session transcripts stored in `~/.kernora/echo.db` on your machine
-- Local LLM analysis via Apple FoundationModels or MLX-LM — zero network calls
+- Local LLM analysis via Ollama on localhost — zero external network calls
 - Optional cloud analysis uses YOUR API key if configured
 - Zero telemetry, zero cloud storage, zero data sharing
 
