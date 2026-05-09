@@ -132,7 +132,9 @@ def _factbooks_git_head() -> str:
         if result.returncode == 0:
             return result.stdout.strip()
     except (FileNotFoundError, subprocess.SubprocessError):
-        pass
+        # Best-effort metadata lookup: if git is unavailable or invocation fails,
+        # treat as "no git commit info" and continue without raising.
+        return ""
     return ""
 
 
