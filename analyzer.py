@@ -167,6 +167,9 @@ def format_turns(turns: list) -> str:
 
 
 def probe_local_llm() -> dict:
+    """Probe for an on-device LLM server on TCP 2744 (FoundationModels) or
+    2745 (MLX-LM). Returns ok=False if no server responds, in which case the
+    caller routes to BYOK / Ollama per the configured provider priority."""
     import urllib.request, json
     for port in (2744, 2745):
         try:

@@ -4,7 +4,7 @@ Nora is the AI work intelligence layer for developers. It runs silently alongsid
 
 Your **AI Leverage Score** — a composite metric of prompt quality, context injection effectiveness, decision acceptance rate, and pattern accumulation — starts at 1.0x and compounds toward 5.0x as Nora learns your patterns.
 
-No cloud required. No API key required on Mac. Your data stays on your machine.
+No cloud required. Run a local Ollama for fully-local analysis with no API key, or BYOK (Anthropic / OpenAI / Google / Bedrock / Grok). Your data stays on your machine.
 
 ## Install
 
@@ -44,7 +44,7 @@ Restart Claude Desktop after editing the config.
 
 ### Cowork (Claude desktop app)
 
-Install the `nora.plugin` from the [Releases](https://github.com/kernora-ai/nora/releases) page. After Nora is installed locally, the plugin connects Cowork to all 19 MCP tools.
+Install the `nora.plugin` from the [Releases](https://github.com/kernora-ai/nora/releases) page. After Nora is installed locally, the plugin connects Cowork to the open-core MCP tools.
 
 ## What Happens
 
@@ -103,16 +103,17 @@ Your IDE (Kiro / Claude Code / Cursor)
     │     ├── on tool use → track patterns
     │     └── on session start → check steering freshness
     │
-    ├── MCP server (19 tools)
+    ├── MCP server (open core — 13 tools)
     │     └── nora_search, nora_patterns, nora_decisions, nora_bugs,
-    │         nora_stats, nora_pe_review, nora_coe, nora_retro, ...
+    │         nora_stats, nora_session, nora_scope_validation,
+    │         nora_skills, nora_retro, nora_inventory, nora_coach,
+    │         nora_onboard, nora_help
     │
-    ├── local LLM (zero-config on Mac)
-    │     ├── Apple FoundationModels (macOS 26+, port 2744)
-    │     └── MLX-LM Qwen2.5-Coder-3B (macOS 14+, port 2745)
+    ├── LLM provider (BYOK or Ollama)
+    │     └── Anthropic, OpenAI, Google, Bedrock, Grok, or local Ollama
     │
     └── dashboard (localhost:2742)
-          ├── AI Leverage Score + trend
+          ├── Prompt-quality signals + trend
           ├── Project-level intelligence
           ├── Decision trace analysis
           ├── Loop health monitoring
@@ -126,12 +127,10 @@ All data in `~/.kernora/echo.db`. Zero bytes leave your machine in BYOK mode.
 Nora tries these in order — the first available one wins:
 
 1. **IDE LLM** (Kiro, Cursor, VS Code) — uses your IDE's built-in model, zero config
-2. **Apple FoundationModels** (macOS 26+) — on-device, zero download, zero cost
-3. **MLX-LM** (macOS 14+) — on-device, ~2GB one-time download
-4. **BYOK API keys** — Anthropic, OpenAI, Google, Bedrock, Grok
-5. **Ollama** — local, free
+2. **BYOK API keys** — Anthropic, OpenAI, Google, Bedrock, Grok
+3. **Ollama** — local, free
 
-On a modern Mac, Nora works out of the box with no API key.
+Use Ollama for fully-local inference.
 
 ## Configuration
 
@@ -150,7 +149,7 @@ port = 2742
 
 ## MCP Tools
 
-19 tools available to your AI agent:
+13 tools available to your AI agent in the open-core build:
 
 | Tool | What it does |
 |------|-------------|
@@ -162,15 +161,9 @@ port = 2742
 | `nora_session` | Session details by ID |
 | `nora_scope_validation` | Safety check before multi-file edits |
 | `nora_skills` | Distilled team methodology |
-| `nora_scan` | Seed DB from git history |
-| `nora_ingest` | Ingest Cowork/Chat/Code session transcript |
-| `nora_pe_review` | Principal Engineer 4-tier code audit |
-| `nora_coe` | Blameless root cause investigation (5 whys) |
-| `nora_coe_product` | Product COE — why was this built wrong |
 | `nora_retro` | Engineering retrospective with git velocity |
-| `nora_sofac` | Factory health status |
 | `nora_inventory` | Feature audit: SHIP/POLISH/WIRE/BLOCKER |
-| `nora_coach` | AI leverage coaching |
+| `nora_coach` | Prompt-quality signals (sessions analyzed, avg quality, repetitions) |
 | `nora_onboard` | Onboard a new developer |
 | `nora_help` | List all tools |
 
