@@ -437,15 +437,3 @@ def _validate_local_result(result: dict) -> dict:
                 o["impact"] = "medium"
                 
     return fixed
-
-def select_models(cfg):
-    pass
-
-def _aggregate_chunk_results(chunks):
-    pass
-
-def phase1_extract():
-    pass
-
-def condense_transcript():
-    pass

@@ -39,11 +39,6 @@ else:
         except ImportError:
             tomllib = None  # type: ignore
 
-try:
-    import telemetry as _telemetry
-except ImportError:
-    _telemetry = None  # type: ignore
-
 app = Flask(__name__)
 _analysis_stalled = False
 _pending_rules = []
@@ -596,86 +591,11 @@ def index():
     except Exception:
         injections = 0
 
-    try:
-        from score_utils import compute_leverage, get_leverage_history
-        lev_data = compute_leverage(db)
-        leverage = lev_data["score"] if lev_data["score"] else "—"
-        leverage_label = lev_data["label"]
-        leverage_color = lev_data["label_color"]
-        
-        # 12.5 CAPTURE
-        total_sessions = session_count  # already fetched above
-        sessions_this_week = db.execute("SELECT COUNT(*) FROM sessions WHERE started_at > datetime('now', '-7 days')").fetchone()[0]
-        capture_color = "var(--success)" if sessions_this_week > 0 else "var(--muted)"
-        
-        # 12.5 LEARN
-        unanalyzed = db.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 0").fetchone()[0]
-        analyzed = db.execute("SELECT COUNT(*) FROM sessions WHERE analyzed = 1").fetchone()[0]
-        learn_color = "var(--success)" if unanalyzed == 0 else "var(--warning)"
-        
-        # 12.5 IMPROVE
-        injections_this_week = db.execute("SELECT COUNT(*) FROM insights WHERE analyzed_at > datetime('now', '-7 days') AND prompt_coaching != ''").fetchone()[0]
-        rules_active = db.execute("SELECT COUNT(*) FROM insights WHERE skill_opportunity != ''").fetchone()[0]
-        improve_color = "var(--success)" if injections_this_week > 0 else "var(--muted)"
-        
-        # 12.6 COMPOUND
-        history = get_leverage_history(db)
-        if len(history) >= 2:
-            lev_this = history[-1]["score"]
-            lev_last = history[-2]["score"]
-            compound_rate = ((lev_this - lev_last) / lev_last) * 100
-            comp_color = "var(--success)" if compound_rate > 0 else "var(--muted)"
-            comp_val = f"{compound_rate:+.1f}%"
-            trend_text = f"Your AI effectiveness is compounding at {compound_rate:+.1f}%/week"
-        else:
-            comp_color = "var(--muted)"
-            comp_val = "—"
-            trend_text = "Your AI effectiveness is compounding at —"
-            
-        loop_health_card = f'''
-        <div class="card" style="margin-bottom:24px;">
-            <h3 style="margin-top:0;font-size:14px;font-weight:600;margin-bottom:12px;color:var(--fg);">Loop Health</h3>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-              <a href="/activity" style="text-decoration:none;color:inherit;">
-                  <div class="card" style="border-left:3px solid {capture_color};height:100%;">
-                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">1. CAPTURE</div>
-                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{total_sessions}</div>
-                    <div style="font-size:12px;color:var(--muted);">{sessions_this_week} this week</div>
-                  </div>
-              </a>
-              <a href="/activity" style="text-decoration:none;color:inherit;">
-                  <div class="card" style="border-left:3px solid {learn_color};height:100%;">
-                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">2. LEARN</div>
-                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{analyzed}</div>
-                    <div style="font-size:12px;color:var(--muted);">{unanalyzed} pending</div>
-                  </div>
-              </a>
-              <a href="/coach" style="text-decoration:none;color:inherit;">
-                  <div class="card" style="border-left:3px solid {improve_color};height:100%;">
-                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">3. IMPROVE</div>
-                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{injections_this_week}</div>
-                    <div style="font-size:12px;color:var(--muted);">{rules_active} rules active</div>
-                  </div>
-              </a>
-              <a href="/coach" style="text-decoration:none;color:inherit;">
-                  <div class="card" style="border-left:3px solid {comp_color};height:100%;">
-                    <div style="font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:0.5px;">4. COMPOUND</div>
-                    <div style="font-size:24px;font-weight:600;margin:4px 0;">{comp_val}</div>
-                    <div style="font-size:12px;color:var(--muted);">{trend_text}</div>
-                  </div>
-              </a>
-            </div>
-        </div>
-        '''
-
-    except Exception as e:
-        leverage = "—"
-        leverage_label = "—"
-        leverage_color = "#6a8aaa"
-        loop_health_card = ""
-        trend_text = "—"
-        # NOTE: session_count, pattern_count, bug_fix_count, injections are
-        # fetched BEFORE this try block and must NOT be zeroed here.
+    leverage = "—"
+    leverage_label = "N/A"
+    leverage_color = "#888"
+    loop_health_card = ""
+    trend_text = "—"
 
 
     # 13.5 Top Projects
@@ -1059,8 +979,6 @@ def resolve_bug(bug_id):
         db.close()
     return redirect("/bugs")
 
-_project_leverage_cache = {}
-
 @app.route("/projects")
 def projects():
     """Projects top-level tab listing summary of active projects."""
@@ -1080,28 +998,15 @@ def projects():
         return shell("Projects", "<div style='padding:60px 24px;text-align:center;'>No projects yet</div>", "Projects")
         
     html_out = ["<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;'>"]
-    from score_utils import compute_leverage
     import time
-    
-    global _project_leverage_cache
-    
+
     for row in rows:
         project = row[0]
         c = row[1]
         last_seen = time_ago(row[2])
-        
-        # Cache logic
-        cache_key = f"{project}_{c}" # invalidate if run count changes
-        if cache_key not in _project_leverage_cache:
-            try:
-                lev_data = compute_leverage(db, project_filter=project)
-            except Exception:
-                lev_data = {"score": None, "label": "—", "label_color": "#6a8aaa", "enough_data": False, "sub_metrics": {}}
-            _project_leverage_cache[cache_key] = lev_data
 
-        lev = _project_leverage_cache[cache_key]
-        score = lev['score'] if lev['score'] else "—"
-        color = lev['label_color']
+        score = "—"
+        color = "#6a8aaa"
         
         base_name = project.split("/")[-1] if "/" in project else project
         
@@ -1137,9 +1042,7 @@ def project_detail(project_name):
     # Project-level dashboard (Sessions + Patterns)
     sessions = db.execute("SELECT * FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 50", (project_name,)).fetchall()
     
-    from score_utils import compute_leverage
-    lev_data = compute_leverage(db, project_filter=project_name)
-    lev_str = f"<div style='font-size:24px;font-weight:700;color:{lev_data['label_color']}'>{lev_data['score'] if lev_data['score'] else '—'}x</div><div style='font-size:12px;color:var(--muted)'>AI Leverage</div>"
+    lev_str = "<div style='font-size:24px;font-weight:700;color:#888'>—</div><div style='font-size:12px;color:var(--muted)'>AI Leverage</div>"
     
     html_out = [
         f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;'>",
@@ -1184,19 +1087,11 @@ def api_certificate():
 
 @app.route("/api/leverage/trend")
 def api_lev_trend():
-    from score_utils import compute_leverage
-    db = get_conn()
-    lev_data = compute_leverage(db) if db else {'score': 1.0}
-    if db: db.close()
-    return jsonify({"current_score": lev_data['score']})
+    return jsonify({"current_score": None})
 
 @app.route("/api/leverage/history")
 def api_lev_history():
     return jsonify([])
-
-@app.route("/api/decision-traces/summary")
-def api_dt_summary():
-    return jsonify({"total_traces": 0})
 
 @app.route("/api/projects")
 def api_projects():
@@ -1635,66 +1530,6 @@ def decisions():
     return shell("Decisions", content, "Decisions")
 
 
-def _telemetry_settings_html() -> str:
-    """Render the telemetry transparency + opt-out section for Settings page."""
-    if not _telemetry:
-        return ""
-
-    enabled = _telemetry.is_telemetry_enabled()
-    checked = "checked" if enabled else ""
-    payload = _telemetry.build_payload()
-    payload_json = json.dumps(payload, indent=2)
-
-    status_color = "#1D9E75" if enabled else "#D85A30"
-    status_text = "Active — one anonymous ping per day" if enabled else "Disabled — no data sent"
-
-    return f"""
-    <div class="card" style="margin-top:1.5rem;border-left:3px solid {status_color}">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h3 style="color:#dce8f5;margin:0">Anonymous Telemetry</h3>
-        <form method="POST" action="/settings/telemetry" style="margin:0">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input type="checkbox" name="telemetry_enabled" value="on" {checked}
-                   onchange="this.form.submit()"
-                   style="width:16px;height:16px;accent-color:#1D9E75">
-            <span style="font-size:.7rem;color:#6a8aaa">{'Enabled' if enabled else 'Disabled'}</span>
-          </label>
-        </form>
-      </div>
-      <p style="font-size:.7rem;color:{status_color};margin:6px 0 0">{status_text}</p>
-      <p style="font-size:.7rem;color:#6a8aaa;margin:8px 0 0;line-height:1.5">
-        Helps us understand how many people use Kernora and which IDEs they prefer.
-        No filenames, no code, no API keys, no IP logging server-side.
-      </p>
-
-      <details style="margin-top:12px">
-        <summary style="font-size:.7rem;color:#378ADD;cursor:pointer;user-select:none">
-          Show exact payload sent &darr;
-        </summary>
-        <pre style="margin:8px 0 0;padding:10px;background:#07090d;border:1px solid #1e2d45;
-                    border-radius:4px;font-size:.65rem;color:#8ba4be;overflow-x:auto;
-                    line-height:1.6;white-space:pre-wrap">{html.escape(payload_json)}</pre>
-        <div style="font-size:.6rem;color:#6a8aaa;margin-top:6px;line-height:1.5">
-          <strong style="color:#dce8f5">machine_id</strong> — SHA256 hash of hostname+username (not reversible)<br>
-          <strong style="color:#dce8f5">ide</strong> — which IDE you're using<br>
-          <strong style="color:#dce8f5">version</strong> — extension version<br>
-          <strong style="color:#dce8f5">os</strong> — operating system<br>
-          <strong style="color:#dce8f5">session_count</strong> — how many sessions in your local DB<br>
-          <strong style="color:#dce8f5">analyzed_count</strong> — how many got LLM analysis<br>
-          <strong style="color:#dce8f5">rules_count</strong> — distilled rules count<br>
-          <strong style="color:#dce8f5">playbooks_count</strong> — captured playbooks count<br>
-          <strong style="color:#dce8f5">has_s3</strong> — is S3 backup configured (boolean)<br>
-          <strong style="color:#dce8f5">has_cloud_sync</strong> — is cloud sync active (boolean)<br>
-          <strong style="color:#dce8f5">sessions_last_7d</strong> — sessions in past week<br>
-          <strong style="color:#dce8f5">first_seen_days</strong> — days since first session<br>
-          <strong style="color:#dce8f5">days_active</strong> — distinct days with activity<br>
-          <strong style="color:#dce8f5">first_rule_days</strong> — days from install to first rule (-1 = none yet)<br>
-          <strong style="color:#dce8f5">mcp_tools_used</strong> — which tools you use (names only, no content)
-        </div>
-      </details>
-    </div>"""
-
-
 @app.route("/coach")
 def coach():
     """Coach page — Effectiveness score, anti-patterns, sessions analysis, tips."""
@@ -1950,21 +1785,19 @@ def api_project_report(project_name):
     project_name = project_name.replace('%2F', '/')
     conn = get_conn()
     try:
-        from score_utils import compute_leverage
-        lev_data = compute_leverage(conn, project_filter=project_name)
         stats = conn.execute('''
             SELECT COUNT(i.session_id) as sessions, SUM(i.tokens_estimated) as tokens
             FROM insights i JOIN sessions s ON i.session_id = s.id
             WHERE s.project = ? AND i.analyzed_at > datetime('now', '-30 days')
         ''', (project_name,)).fetchone()
-        
+
         # approximate bugs and patterns for project limit
         bugs = conn.execute("SELECT COUNT(*) FROM reported_bugs r JOIN sessions s ON r.session_id=s.id WHERE s.project=?", (project_name,)).fetchone()[0]
         sessions = stats["sessions"] or 0 if stats else 0
         tokens = stats["tokens"] or 0 if stats else 0
-        leverage = lev_data["score"] if lev_data["score"] else "—"
-        leverage_lbl = lev_data["label"]
-        
+        leverage = "—"
+        leverage_lbl = "—"
+
     except Exception:
         sessions = 0
         tokens = 0
@@ -2182,20 +2015,6 @@ def settings():
     region = swarm_cfg.get("region", "")
     d_mode = "checked" if str(swarm_cfg.get("director_mode", "false")).lower() == "true" else ""
 
-    # Tiered model detection
-    try:
-        from analyzer import select_models, MODELS
-        model_info = select_models(c)
-        deep_id, deep_cap, deep_name = model_info["deep"]
-        classify_id, classify_cap, classify_name = model_info["classify"]
-        model_warnings = model_info.get("warnings", [])
-    except Exception:
-        deep_name, deep_cap = "unknown", 0
-        classify_name, classify_cap = "unknown", 0
-        model_warnings = ["Could not load model selector"]
-
-    cap_color = {5: "#1D9E75", 4: "#378ADD", 3: "#BA7517", 2: "#D85A30", 1: "#D85A30"}
-
     # TASK 7.3: Injection Latency Alert
     try:
         db = get_conn()
@@ -2304,7 +2123,6 @@ def settings():
       </p>
     </div>
 
-    {_telemetry_settings_html()}
 """
     else:
         # ── VS Code / BYOK mode: full settings with provider, models, swarm ─
@@ -2325,60 +2143,6 @@ def settings():
       </form>
     </div>
 
-    <div class="card" style="margin-top:1rem;border-left:3px solid var(--teal)">
-      <h3 style="color:#dce8f5">Tiered Model Selection</h3>
-      <p style="font-size:.7rem;color:#6a8aaa;margin:0 0 .75rem">
-        Kernora auto-selects two models: a DEEP model for playbooks, decisions, and patterns,
-        and a CLASSIFY model for session type, themes, and bugs.
-      </p>
-      <div style="display:flex;gap:20px;flex-wrap:wrap">
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:.65rem;color:#6a8aaa;text-transform:uppercase;letter-spacing:.06em">Deep Extraction</div>
-          <div style="font-size:.9rem;font-weight:500;color:#dce8f5;margin:4px 0">{html.escape(deep_name)}</div>
-          <div style="font-size:.7rem;color:{cap_color.get(deep_cap, '#888')}">Capability {deep_cap}/5</div>
-        </div>
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:.65rem;color:#6a8aaa;text-transform:uppercase;letter-spacing:.06em">Classification</div>
-          <div style="font-size:.9rem;font-weight:500;color:#dce8f5;margin:4px 0">{html.escape(classify_name)}</div>
-          <div style="font-size:.7rem;color:{cap_color.get(classify_cap, '#888')}">Capability {classify_cap}/5</div>
-        </div>
-      </div>
-      {''.join(f'<div style="margin-top:.5rem;font-size:.7rem;color:#D85A30;border-left:2px solid #D85A30;padding-left:8px">{html.escape(w)}</div>' for w in model_warnings)}
-    </div>
-
-    <div class="card" style="margin-top:1.5rem; border: 1px solid #1e2d45;">
-      <h3 style="color:#dce8f5; border-bottom: 1px solid #1e2d45; padding-bottom: 0.5rem; margin-bottom: 0;">Enterprise Swarm Cloud</h3>
-      <p style="font-size: 0.75rem; color: #6a8aaa; margin-top: 8px;">Synchronize your local SOTA methodologies across your entire engineering team instantly.</p>
-
-      <form method="POST" style="margin-top: 1rem;">
-        <input type="hidden" name="provider" value="{provider}">
-
-        <label style="font-size:0.75rem; color:#6a8aaa; display:block; margin-top:10px;">AWS IAM Configuration (BYOK)</label>
-        <div style="font-size:0.65rem; color:#888780; margin-bottom: 10px;">AWS credentials must be configured via environment variables or AWS CLI. Do not enter credentials here.</div>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <input type="text" name="s3_bucket" value="{bucket}" placeholder="enterprise-swarm-bucket" style="width:50%;">
-          <input type="text" name="s3_region" value="{region}" placeholder="us-east-1" style="width:50%;">
-        </div>
-
-        <div style="margin: 15px 0; border-top: 1px dotted #1e2d45; padding-top: 15px;">
-           <label style="font-size:0.75rem; color:#6a8aaa; display:block;">Or use Kernora Managed Infrastructure</label>
-           <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
-             <span style="font-size:0.65rem; color:#888780;">Zero Setup. 100% Encrypted SLA. Automatically eject data to your AWS bucket anytime.</span>
-             <button type="button" onclick="document.getElementById('managed_toggle').value='true'; this.form.submit()" style="color:#1D9E75; border-color:#1D9E75;">Provision Organization Cloud</button>
-             <input type="hidden" id="managed_toggle" name="is_managed" value="false">
-           </div>
-        </div>
-
-        <div style="margin: 15px 0; border-top: 1px dotted #1e2d45; padding-top: 15px; display:flex; align-items:center; gap:8px;">
-           <input type="checkbox" name="director_mode" value="true" {d_mode}>
-           <span style="font-size:0.75rem; color:#dce8f5;">Enable Director Hub View (Global Network Analytics)</span>
-        </div>
-
-        <button type="submit" style="width:100%; margin-top:10px; background:#1e2d45; color:white;">Save Swarm Protocol Config</button>
-      </form>
-    </div>
-
-    {_telemetry_settings_html()}
 """
     danger_zone = f"""
     <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(224, 92, 92, 0.4); background: rgba(224, 92, 92, 0.05);">
@@ -2433,22 +2197,6 @@ def nuke_database():
         db.commit()
         db.close()
     return redirect("/")
-
-
-@app.route("/settings/telemetry", methods=["POST"])
-def toggle_telemetry():
-    enabled = request.form.get("telemetry_enabled", "off") == "on"
-    if _telemetry:
-        _telemetry.set_telemetry_enabled(enabled)
-    return redirect("/settings")
-
-
-@app.route("/api/telemetry-payload")
-def telemetry_payload_api():
-    """Returns the exact JSON payload so the Settings page can display it."""
-    if _telemetry:
-        return json.dumps(_telemetry.build_payload(), indent=2)
-    return json.dumps({"error": "telemetry module not loaded"})
 
 
 @app.route("/api/ide/heartbeat", methods=["POST"])
@@ -2576,7 +2324,6 @@ def health():
             "analysis_trigger": "immediate (on new session)",
             "analysis_fallback_sec": 600,
             "steering_regen": "after each analysis",
-            "telemetry_interval_hrs": 6,
         },
     }
 
@@ -3235,10 +2982,6 @@ if __name__ == "__main__":
         init_db()
     except Exception:
         pass
-
-    # Anonymous telemetry — one ping per day, opt-out via config.toml
-    if _telemetry:
-        _telemetry.maybe_ping()
 
     # Start daemon threads (previously separate daemon.py process)
     t_spool = threading.Thread(target=_replay_spool, daemon=True)
