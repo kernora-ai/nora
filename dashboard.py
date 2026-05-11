@@ -592,10 +592,8 @@ def index():
         injections = 0
 
     leverage = "—"
-    leverage_label = "N/A"
     leverage_color = "#888"
     loop_health_card = ""
-    trend_text = "—"
 
 
     # 13.5 Top Projects
