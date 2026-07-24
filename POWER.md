@@ -32,17 +32,17 @@ For manual install:
 git clone https://github.com/kernora-ai/nora.git /tmp/nora-install && bash /tmp/nora-install/install.sh && rm -rf /tmp/nora-install
 ```
 
-### Step 3: Configure LLM
+### Step 3: Configure LLM (Optional)
 
-Open core uses BYOK API keys or local Ollama. Set any of these environment variables:
+Nora works out of the box with no API key on Mac (Apple FoundationModels on macOS 26+, MLX-LM on macOS 14+).
+
+For cloud analysis, set any of these environment variables:
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY`
 - `OPENAI_API_KEY`
 - `AWS_PROFILE` (for Bedrock)
 
-Or run a local model server (Ollama at `localhost:11434`) for fully-local analysis with no API key.
-
-Provider priority (open core): IDE LLM → BYOK API keys → Ollama.
+Provider priority: IDE LLM → Apple FoundationModels → MLX-LM → BYOK API keys → Ollama.
 
 ### Step 4: Verify Installation
 
@@ -55,21 +55,26 @@ Provider priority (open core): IDE LLM → BYOK API keys → Ollama.
 
 **Connection:** Local stdio process
 
-Nora's MCP server provides 13 tools (open core) for querying your session intelligence. All data stays local in `~/.kernora/echo.db`.
+Nora's MCP server provides 18 tools for querying your session intelligence. All data stays local in `~/.kernora/echo.db`.
 
-**Tools (13):**
+**Tools (18):**
 
 - **nora_search** — Full-text search across patterns, decisions, bugs, and insights
 - **nora_patterns** — List effective coding patterns, optionally filtered by project
 - **nora_decisions** — List architectural decisions recorded across sessions
 - **nora_bugs** — List known bugs with severity, file path, and fix code
-- **nora_stats** — Dashboard stats: sessions, insights, prompt-quality signals
+- **nora_stats** — Dashboard stats: sessions, insights, AI Leverage Score
 - **nora_session** — Get full details for a specific session by ID
 - **nora_scope_validation** — Validate execution scope before multi-file edits
 - **nora_skills** — Fetch distilled methodology from your best sessions
+- **nora_scan** — Seed database from git history
+- **nora_pe_review** — Principal Engineer 4-tier code audit
+- **nora_coe** — Blameless root cause investigation (5 whys)
+- **nora_coe_product** — Product COE — why was this built wrong
 - **nora_retro** — Engineering retrospective with git velocity
+- **nora_sofac** — Factory health status
 - **nora_inventory** — Feature audit: SHIP/POLISH/WIRE/BLOCKER
-- **nora_coach** — Prompt-quality signals (sessions analyzed, avg quality, repetitions)
+- **nora_coach** — AI leverage coaching
 - **nora_onboard** — Onboard a new developer
 - **nora_help** — List all tools
 
@@ -84,7 +89,7 @@ Nora's MCP server provides 13 tools (open core) for querying your session intell
 ## Privacy
 
 - Session transcripts stored in `~/.kernora/echo.db` on your machine
-- Local LLM analysis via Ollama on localhost — zero external network calls
+- Local LLM analysis via Apple FoundationModels or MLX-LM — zero network calls
 - Optional cloud analysis uses YOUR API key if configured
 - Zero telemetry, zero cloud storage, zero data sharing
 
@@ -124,15 +129,3 @@ port = 2742
 - [GitHub: kernora-ai/nora](https://github.com/kernora-ai/nora)
 - [Dashboard](http://localhost:2742)
 - [kernora.ai](https://kernora.ai)
-
-## License and support
-
-This power is licensed under Elastic License 2.0 (Elastic-2.0).
-
-**Privacy Policy**
-
-https://kernora.ai/privacy
-
-**Support**
-
-https://github.com/kernora-ai/nora/issues | hello@kernora.ai

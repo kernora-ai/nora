@@ -20,12 +20,46 @@ const PYTHON = path.join(VENV_DIR, isWin ? 'Scripts' : 'bin', isWin ? 'python.ex
 const PIP = path.join(VENV_DIR, isWin ? 'Scripts' : 'bin', isWin ? 'pip.exe' : 'pip');
 const DASHBOARD = path.join(APP_DIR, 'dashboard.py');
 
+// Auto-approve list. Must mirror the Tool(name="...") registrations in
+// nora_mcp.py exactly — drift causes the IDE to prompt-on-tool-call instead
+// of silently invoking, destroying the "ambient knowledge" UX.
+//
+// Ground truth: `grep -oE 'name="nora_[a-z_]+"' nora_mcp.py | sort -u`
+// Last reconciled: 2026-05-10 (Task #385). Count: 45 tools.
+//
+// Alias entries (nora_sofac, nora_engineering_health) are KEPT per factbook
+// f255 (alias-retention pattern, 2026-04-25): they are registered Tool()
+// objects in nora_mcp.py that route to the same handler as nora_status.
+// Removing them would cause the IDE to prompt-on-call for users whose
+// steering files reference the legacy names.
 const NORA_TOOLS = [
+    // retrieval + read-only history
     "nora_search", "nora_patterns", "nora_decisions", "nora_bugs",
-    "nora_stats", "nora_session", "nora_scope_validation", "nora_skills",
-    "nora_scan", "nora_pe_review", "nora_coe", "nora_coe_product",
-    "nora_retro", "nora_sofac", "nora_inventory", "nora_help",
-    "nora_coach", "nora_onboard",
+    "nora_stats", "nora_session", "nora_skills", "nora_status",
+    "nora_help", "nora_inventory", "nora_roi",
+    "nora_engineering_health",  // alias of nora_status (f255)
+    // scoped retrieval + context-for-task
+    "nora_context_for_task", "nora_scope_validation",
+    // factbook reads + edits
+    "nora_factbook", "nora_factbook_view", "nora_factbook_verify",
+    "nora_factbook_inject", "nora_factbook_promote", "nora_factbook_audit",
+    "nora_factbook_add", "nora_factbook_import",
+    "nora_factbook_ingest_propose",
+    "nora_factbook_ingest_submit",
+    "nora_provenance",  // alias of nora_factbook(action='provenance')
+    // capture (live + post-session)
+    "nora_capture_pending", "nora_capture_accept", "nora_capture_reject",
+    // extraction (scans project root + calls LLM to produce candidate facts)
+    "nora_extract",
+    // workflows (3-stage start/submit/finalize patterns)
+    "nora_pe_review", "nora_coe", "nora_coe_start", "nora_coe_submit",
+    "nora_coe_finalize", "nora_coe_product", "nora_retro",
+    "nora_sofac",               // alias of nora_status (f255)
+    // generators + advisors
+    "nora_generate", "nora_coach", "nora_onboard", "nora_consolidate",
+    "nora_consolidate_apply", "nora_retire_fact", "nora_retire_undo",
+    // bridges
+    "nora_claude_memory", "nora_rate_context",
 ];
 
 // ── Structured logging ────────────────────────────────────────────────────
@@ -34,6 +68,47 @@ const log = {
     warn: (msg: string) => console.warn(`[kernora] ⚠ ${msg}`),
     error: (msg: string) => console.error(`[kernora] ✖ ${msg}`),
 };
+
+// ── Startup drift check ────────────────────────────────────────────────────
+// Reads ~/.kernora/app/nora_mcp.py and greps for Tool(name="...") entries.
+// Logs a warning for any stale (NORA_TOOLS has it, registry does not) or
+// missing (registry has it, NORA_TOOLS does not) entry. Fires once per
+// activation; skipped if nora_mcp.py is not yet installed.
+function checkToolsDrift(): void {
+    const mcpPy = path.join(APP_DIR, 'nora_mcp.py');
+    if (!fs.existsSync(mcpPy)) {
+        return; // not installed yet — skip silently
+    }
+    try {
+        const src = fs.readFileSync(mcpPy, 'utf8');
+        const re = /name\s*=\s*"(nora_[a-z_]+)"/g;
+        const registrySet = new Set<string>();
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(src)) !== null) {
+            registrySet.add(m[1]);
+        }
+        const arraySet = new Set(NORA_TOOLS);
+        const stale: string[] = [];
+        const missing: string[] = [];
+        for (const t of arraySet) {
+            if (!registrySet.has(t)) stale.push(t);
+        }
+        for (const t of registrySet) {
+            if (!arraySet.has(t)) missing.push(t);
+        }
+        if (stale.length > 0) {
+            log.warn(`NORA_TOOLS drift — stale (remove from array): ${stale.join(', ')}`);
+        }
+        if (missing.length > 0) {
+            log.warn(`NORA_TOOLS drift — missing (add to array): ${missing.join(', ')}`);
+        }
+        if (stale.length === 0 && missing.length === 0) {
+            log.info(`NORA_TOOLS in sync with registry (${arraySet.size} tools)`);
+        }
+    } catch (err) {
+        log.warn(`checkToolsDrift: could not read nora_mcp.py — ${err}`);
+    }
+}
 
 // ── IDE detection ──────────────────────────────────────────────────────────
 function detectIDE(): 'kiro' | 'cursor' | 'vscode' | 'antigravity' {
@@ -46,6 +121,11 @@ function detectIDE(): 'kiro' | 'cursor' | 'vscode' | 'antigravity' {
 
 // ── Sync bundled Python files to ~/.kernora/app/ on every activation ──────
 // ALSO writes mcp.json immediately so kiro-cli has it before bootstrap finishes.
+// SEC1 (2026-04-19): dev-mode guard — if ~/.kernora/app/ is a symlink to the
+// developer's source tree, we MUST NOT copy bundled .py files over it. Doing
+// so silently overwrites in-progress work and reverts committed fixes whenever
+// the user opens Kiro/Cursor. Compare extension version against current app
+// version; if the extension is older, abort the copy with a warning.
 function syncBundledFiles(extensionPath: string): boolean {
     const bundledDir = path.join(extensionPath, 'bundled');
     if (!fs.existsSync(bundledDir)) {
@@ -59,11 +139,60 @@ function syncBundledFiles(extensionPath: string): boolean {
         return false;
     }
 
+    // Dev-mode guard: skip the copy if APP_DIR is a symlink.
+    try {
+        if (fs.existsSync(APP_DIR) && fs.lstatSync(APP_DIR).isSymbolicLink()) {
+            log.warn(
+                `dev mode: ~/.kernora/app/ is a symlink to ${fs.realpathSync(APP_DIR)}. ` +
+                'Skipping bundled-file copy so source-tree changes are preserved.'
+            );
+            registerUniversalMcpServers();
+            return true;
+        }
+    } catch (err) {
+        log.warn(`dev-mode check failed (${err}); proceeding with normal copy.`);
+    }
+
+    // Version guard: only overwrite APP_DIR files when the extension's version
+    // is >= the version already installed. Protects users who ran `kernora
+    // install` from a newer source checkout from having their upgrade clobbered
+    // by an older VSIX on IDE startup.
+    let extensionVersion = 'unknown';
+    try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(extensionPath, 'package.json'), 'utf-8'));
+        extensionVersion = pkg.version ?? 'unknown';
+    } catch { /* ignore */ }
+
+    try {
+        const installedVersionFile = path.join(APP_DIR, '.version');
+        if (fs.existsSync(installedVersionFile)) {
+            const installed = fs.readFileSync(installedVersionFile, 'utf-8').trim();
+            if (installed && installed !== 'unknown' && extensionVersion !== 'unknown') {
+                if (compareVersion(extensionVersion, installed) < 0) {
+                    log.warn(
+                        `Extension v${extensionVersion} is older than installed v${installed}. ` +
+                        'Skipping overwrite — user has a newer install.'
+                    );
+                    registerUniversalMcpServers();
+                    return true;
+                }
+            }
+        }
+    } catch (err) {
+        log.warn(`version-guard check failed (${err}); proceeding with normal copy.`);
+    }
+
     fs.mkdirSync(APP_DIR, { recursive: true });
     let synced = 0;
     for (const file of files) {
         const dest = path.join(APP_DIR, file);
-        fs.copyFileSync(path.join(bundledDir, file), dest);
+        try {
+            fs.copyFileSync(path.join(bundledDir, file), dest);
+        } catch (err: any) {
+            // EPERM/EACCES when dest is read-only or a hardlinked/same-inode case
+            log.warn(`Skipped ${file}: ${err?.message ?? err}`);
+            continue;
+        }
         if (file.endsWith('.sh')) {
             try { fs.chmodSync(dest, 0o755); } catch { }
         }
@@ -71,15 +200,28 @@ function syncBundledFiles(extensionPath: string): boolean {
     }
 
     try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(extensionPath, 'package.json'), 'utf-8'));
-        fs.writeFileSync(path.join(APP_DIR, '.version'), pkg.version ?? 'unknown');
+        fs.writeFileSync(path.join(APP_DIR, '.version'), extensionVersion);
     } catch { /* ignore */ }
 
-    log.info(`Synced ${synced} files to ~/.kernora/app/`);
+    log.info(`Synced ${synced} files to ~/.kernora/app/ (ext v${extensionVersion})`);
 
     // Write MCP configuration early across ecosystems.
     registerUniversalMcpServers();
     return true;
+}
+
+// Compare semver strings "a" vs "b" — returns <0, 0, >0.
+// Tolerates unknown/missing components by treating them as 0.
+function compareVersion(a: string, b: string): number {
+    const pa = a.split('.').map(x => parseInt(x, 10) || 0);
+    const pb = b.split('.').map(x => parseInt(x, 10) || 0);
+    const n = Math.max(pa.length, pb.length);
+    for (let i = 0; i < n; i++) {
+        const ai = pa[i] ?? 0;
+        const bi = pb[i] ?? 0;
+        if (ai !== bi) return ai - bi;
+    }
+    return 0;
 }
 
 // ── MCP Registration ──────────────────────────────────────────────────────────
@@ -101,6 +243,12 @@ function registerUniversalMcpServers(): void {
                 catch (err) { 
                     log.error(`Aborting MCP registration: ${configPath} is malformed JSON.`);
                     return;
+                }
+                // Backup before merge-write so we never lose other servers.
+                try {
+                    fs.copyFileSync(configPath, configPath + '.bak');
+                } catch (bakErr) {
+                    log.warn(`Could not backup ${configPath}: ${bakErr}`);
                 }
             }
             if (!cfg.mcpServers) cfg.mcpServers = {};
@@ -131,6 +279,9 @@ function registerUniversalMcpServers(): void {
 
     // 5. Cursor Native MCP
     writeMcpToPath(path.join(os.homedir(), '.cursor', 'mcp.json'));
+
+    // 6. Antigravity (Gemini) — detected as an IDE but previously never configured
+    writeMcpToPath(path.join(os.homedir(), '.gemini', 'antigravity', 'mcp_config.json'));
 
     log.info('Universal MCP servers registered');
 }
@@ -387,17 +538,17 @@ function installClaudeCodeHooks(): void {
         }
         if (!claudeSettings.hooks) { claudeSettings.hooks = {}; }
 
-        // PreToolUse: inject Nora context before each Claude Code tool call
+        // SessionStart: run nora_session_start.py once per session (not per tool call).
+        // was PreToolUse — corrected to SessionStart (cleanup_settings.py remediation retired)
         const hookCmd = `"${PYTHON}" "${dest}"`;
-        if (!Array.isArray(claudeSettings.hooks.PreToolUse)) {
-            claudeSettings.hooks.PreToolUse = [];
+        if (!Array.isArray(claudeSettings.hooks.SessionStart)) {
+            claudeSettings.hooks.SessionStart = [];
         }
         // Remove stale Nora entries, re-add fresh
-        claudeSettings.hooks.PreToolUse = claudeSettings.hooks.PreToolUse.filter(
+        claudeSettings.hooks.SessionStart = claudeSettings.hooks.SessionStart.filter(
             (h: any) => !JSON.stringify(h).includes('nora_session_start')
         );
-        claudeSettings.hooks.PreToolUse.push({
-            matcher: '.*',
+        claudeSettings.hooks.SessionStart.push({
             hooks: [{ type: 'command', command: hookCmd }],
         });
 
@@ -791,6 +942,11 @@ export async function activate(context: vscode.ExtensionContext) {
         log.info(`Same version: v${currVersion}`);
     }
 
+    // Step 0: Check for drift between NORA_TOOLS and nora_mcp.py registry.
+    // Runs before sync so we see the installed (pre-sync) state; any drift
+    // discovered here will be corrected when the next bundled sync lands.
+    checkToolsDrift();
+
     // Step 1: Sync bundled files (copies Python code to ~/.kernora/app/)
     const syncOk = syncBundledFiles(context.extensionPath);
     if (!syncOk) {
@@ -889,10 +1045,25 @@ class KernoraViewProvider implements vscode.WebviewViewProvider {
 
     private _html(baseUrl: string) {
         const startPath = this._freshInstall ? '/welcome' : '/';
+        // Issue #468 (H-3): VS Code webviews apply an undefined-default CSP
+        // when no <meta http-equiv="Content-Security-Policy"> is present —
+        // a VS Code update tightening that default can blank the rail.
+        // Declare an explicit policy: the loader needs inline script/style,
+        // and the iframe + its fetches/images need the mapped dashboard
+        // origin (baseUrl, which asExternalUri may rewrite to a tunnel host).
+        const csp = [
+            `default-src 'none'`,
+            `frame-src ${baseUrl}`,
+            `connect-src ${baseUrl}`,
+            `img-src ${baseUrl} data:`,
+            `script-src 'unsafe-inline'`,
+            `style-src 'unsafe-inline'`,
+        ].join('; ');
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kernora</title>
     <style>
@@ -905,6 +1076,10 @@ class KernoraViewProvider implements vscode.WebviewViewProvider {
         #loader h2 { color: #1D9E75; font-size: 1rem; margin: 0 0 8px 0; }
         #loader .dots::after { content: ''; animation: dots 1.5s steps(3,end) infinite; }
         @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+        #retry-btn {
+            margin-top: 14px; padding: 6px 16px; font-size: .8rem; cursor: pointer;
+            background: #1D9E75; color: #fff; border: none; border-radius: 6px;
+        }
     </style>
 </head>
 <body>
@@ -923,31 +1098,56 @@ class KernoraViewProvider implements vscode.WebviewViewProvider {
         let attempt = 0;
         const maxAttempts = 40;
 
+        function showDashboard() {
+            loader.style.display = 'none';
+            iframe.style.display = 'block';
+            if (iframe.src !== baseUrl + startPath) {
+                iframe.src = baseUrl + startPath;
+            }
+        }
+
+        // Issue #468 (M-1): give-up state offers a manual retry so a
+        // slow-but-eventual boot does not strand the user behind a stale
+        // message that only a full window reload can clear.
+        function showGiveUp() {
+            loader.innerHTML =
+                '<h2 style="color:#1D9E75">Kernora</h2>' +
+                '<p>Dashboard did not respond yet.<br>' +
+                'It may still be starting (first run installs Python deps).</p>' +
+                '<button id="retry-btn">Retry now</button>';
+            const btn = document.getElementById('retry-btn');
+            if (btn) btn.addEventListener('click', () => {
+                attempt = 0;
+                loader.innerHTML =
+                    '<h2>Kernora</h2>' +
+                    '<p>Connecting to dashboard<span class="dots"></span></p>';
+                tryLoad();
+            });
+        }
+
         function tryLoad() {
             attempt++;
             if (attempt > maxAttempts) {
-                loader.innerHTML = '<h2 style="color:#1D9E75">Kernora</h2><p>Dashboard did not start.<br>Check that Python 3.9+ is installed and reload the window.</p>';
+                showGiveUp();
                 return;
             }
-            fetch(baseUrl + '/', { mode: 'no-cors' })
-                .then(() => {
-                    loader.style.display = 'none';
-                    iframe.style.display = 'block';
-                    if (iframe.src !== baseUrl + startPath) {
-                        iframe.src = baseUrl + startPath;
+            // Issue #468 (H-2): a 'no-cors' fetch returns an opaque response
+            // that resolves even on 500/503 — it would mask a broken Flask
+            // app as 'up'. Use a normal same-origin request and gate on .ok
+            // so a partial failure keeps retrying instead of showing a 500
+            // page inside the rail.
+            fetch(baseUrl + '/', { cache: 'no-store' })
+                .then((resp) => {
+                    if (resp && resp.ok) {
+                        showDashboard();
+                    } else {
+                        setTimeout(tryLoad, 2000);
                     }
                 })
                 .catch(() => {
                     setTimeout(tryLoad, 2000);
                 });
         }
-
-        let checkInterval = setInterval(() => {
-            if (iframe.style.display === 'block') {
-                clearInterval(checkInterval);
-                return;
-            }
-        }, 2000);
 
         tryLoad();
     </script>

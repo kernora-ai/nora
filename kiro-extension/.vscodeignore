@@ -7,3 +7,16 @@ tsconfig.json
 package-lock.json
 *.vsix
 skills/kernora-rebuild/kernora-rebuild/**
+bundled/__pycache__/**
+bundled/**/__pycache__/**
+bundled/.hypothesis/**
+bundled/.pytest_cache/**
+bundled/**/.pytest_cache/**
+**/.DS_Store
+# Scratch / demo / seed / verify-demo scripts must never ship in the VSIX.
+# Defense-in-depth: sync.sh denylist is the primary gate; this catches any
+# file that bypasses it (manual copy, glob widening, etc.).
+bundled/_*.py
+bundled/run_demo*.py
+bundled/verify_demo*.py
+bundled/seed_demo_factbook.py

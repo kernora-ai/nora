@@ -1,20 +1,44 @@
 {
   "name": "kernora",
-  "displayName": "Kernora — AI Work Intelligence",
-  "description": "AI work intelligence for developers. Track your AI Leverage Score, capture patterns, get coaching — all locally. Zero telemetry.",
-  "version": "2.1.0",
+  "displayName": "Kernora — Your AI sessions have a memory now",
+  "description": "Every AI coding session forgets everything. Nora remembers. Captures patterns, decisions, and bugs from Claude Code, Cursor, Kiro, and Cline — builds a context graph that makes every future session smarter. Track your AI Leverage Score. 100% local. Zero telemetry. BYOK.",
+  "version": "2.8.1",
   "publisher": "kernora",
   "engines": {
     "vscode": "^1.80.0"
   },
   "icon": "resources/icon.png",
-  "categories": ["Other", "Machine Learning"],
-  "keywords": ["ai", "llm", "productivity", "claude", "kiro", "cursor", "session", "patterns", "leverage", "coaching", "mcp"],
+  "categories": [
+    "AI",
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "llm",
+    "productivity",
+    "claude",
+    "claude-code",
+    "kiro",
+    "cursor",
+    "cline",
+    "session",
+    "patterns",
+    "leverage",
+    "coaching",
+    "mcp",
+    "memory",
+    "context",
+    "context-graph",
+    "developer-intelligence"
+  ],
   "galleryBanner": {
     "color": "#07090d",
     "theme": "dark"
   },
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -46,6 +70,61 @@
         "command": "kernora.openDashboardExternal",
         "title": "Kernora: Open Dashboard in Browser"
       }
+    ],
+    "walkthroughs": [
+      {
+        "id": "nora.getStarted",
+        "title": "Get started with Nora",
+        "description": "Install the Kernora backend, open a project, see grounding cite a factlet, run nora_help, and verify zero egress.",
+        "steps": [
+          {
+            "id": "nora.installBackend",
+            "title": "Install the Kernora backend",
+            "description": "One machine-level install under `~/.kernora/`. Required before grounding and MCP tools work.\n\n[Open install docs](https://kernora.ai/#install)",
+            "media": {
+              "markdown": "media/walkthrough/01-install-backend.md"
+            },
+            "completionEvents": [
+              "onLink:https://kernora.ai/#install"
+            ]
+          },
+          {
+            "id": "nora.openProject",
+            "title": "Open a project — grounding fires automatically",
+            "description": "Open a folder, run `kernora generate`, then ask your agent something your factbook covers. Grounding injects before the model writes.",
+            "media": {
+              "markdown": "media/walkthrough/02-open-project.md"
+            }
+          },
+          {
+            "id": "nora.seeCitation",
+            "title": "See a factlet cited",
+            "description": "A grounded turn names the factlet and its trust basis. Click the citation to open the decision trail.",
+            "media": {
+              "markdown": "media/walkthrough/03-see-citation.md"
+            }
+          },
+          {
+            "id": "nora.runHelp",
+            "title": "Run nora_help",
+            "description": "Ask `nora_help` in chat to list the MCP tools active on your tier (15 Lite / 60 Pro).",
+            "media": {
+              "markdown": "media/walkthrough/04-nora-help.md"
+            }
+          },
+          {
+            "id": "nora.verifyZeroEgress",
+            "title": "Verify zero egress",
+            "description": "0 bytes to Kernora servers by default. Run `kernora network-check` (or tcpdump) to verify.\n\n[Open security page](https://kernora.ai/security.html)",
+            "media": {
+              "markdown": "media/walkthrough/05-zero-egress.md"
+            },
+            "completionEvents": [
+              "onLink:https://kernora.ai/security.html"
+            ]
+          }
+        ]
+      }
     ]
   },
   "scripts": {
@@ -61,10 +140,11 @@
   "homepage": "https://kernora.ai",
   "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
-    "@types/vscode": "^1.80.0",
     "@types/node": "18.x",
-    "typescript": "^5.1.3",
-    "@vscode/vsce": "^2.19.0"
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^2.19.0",
+    "tmp": "^0.2.7",
+    "typescript": "^5.1.3"
   },
   "capabilities": {
     "untrustedWorkspaces": {

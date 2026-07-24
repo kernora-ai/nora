@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Kernora — AI Work Intelligence
 # Elastic License 2.0 — commercial use requires agreement with kernora.ai
-# https://github.com/kernora-ai/nora/blob/main/LICENSE
 from __future__ import annotations  # PEP 563: str|None works on Python 3.9+
 import db
 
@@ -63,16 +62,23 @@ def check_known_errors(output: str) -> list[str]:
         return []
 
 
-def log_tool_event(tool_name: str, success: bool):
-    """Log tool usage to nora_metrics for pattern analysis."""
+def log_tool_event(tool_name: str, success: bool, session_id: str | None = None):
+    """Log tool usage to nora_metrics for pattern analysis.
+
+    2026-05-10 (Task #388): session_id added so
+    score_utils._compute_injection_hit_rate can JOIN against
+    sessions.turns_json. Migration 0017 adds the column. Hook callers
+    may pass None when the payload doesn't include session_id; the
+    column is nullable.
+    """
     if not DB_PATH.exists():
         return
     try:
         conn = db.get_conn()
         conn.execute(
-            "INSERT INTO nora_metrics (event_type, result_type, keywords, created_at) "
-            "VALUES ('tool_use', ?, ?, datetime('now'))",
-            (tool_name, json.dumps({"success": success})),
+            "INSERT INTO nora_metrics (event_type, result_type, keywords, session_id, created_at) "
+            "VALUES ('tool_use', ?, ?, ?, datetime('now'))",
+            (tool_name, json.dumps({"success": success}), session_id),
         )
         conn.commit()
         conn.close()
@@ -120,8 +126,12 @@ def main():
                 file_path = stripped
                 break
 
+    # 2026-05-10: extract session_id from hook payload (Claude
+    # Code passes it at the top level). Nullable — Kiro hooks may omit it.
+    _sid = data.get("session_id") or (data.get("session", {}) or {}).get("id") or None
+
     # Log the tool event (local DB + HTTP to dashboard)
-    log_tool_event(tool_name, not is_error)
+    log_tool_event(tool_name, not is_error, _sid)
     try:
         event_data = {
             "tool_name": tool_name,

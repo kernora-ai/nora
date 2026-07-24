@@ -55,3 +55,18 @@ auto_open = true
 verified = true
 # Confirms Kernora receives zero data in byok mode.
 # Verified by network audit during install.
+
+[capture]
+# Live Capture pipeline — all 3 triggers default-on. Flip to false to disable.
+auto_enabled           = true
+auto_interval_minutes  = 60      # hourly; fires only with substantive turns since last capture
+auto_min_new_turns     = 8
+auto_max_per_day       = 4
+precompact_enabled     = true    # pre-compact hook, fire-and-forget (<250 ms)
+notify_threshold_pending = 5     # badge appears at this pending count
+
+[bridge]
+# Confidence threshold for facts written to ~/.claude/projects/<p>/memory/nora-intelligence.md
+# via nora_claude_memory(write=True). Only facts at confidence >= this value are exported.
+# Range: 0.0 (export everything) to 1.0 (export nothing). Default: 0.85.
+min_confidence = 0.85

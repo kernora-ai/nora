@@ -4,6 +4,9 @@ __pycache__/
 *.log
 .DS_Store
 
+# Website screenshot / verification artifacts (Playwright captures)
+website/_*.png
+
 # Node / VS Code extension build artifacts
 node_modules/
 *.vsix
@@ -27,24 +30,98 @@ cloud_backend/.cdk.staging/
 *.sock
 *.pid
 
+# SQLite / local runtime DBs — NEVER commit. echo.db can be 1GB+ of
+# session transcripts. Added 2026-04-24 per G4 (sqlite leak hardening).
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.db-journal
+*.db-wal
+*.db-shm
+echo.db
+echo.db-*
+# Kernora-specific runtime artifacts that must never enter git
+.kernora/
+kernora-test-*.db
+
+# Secrets — never commit real configs or keys
+config.toml
+*.secret
+*.key
+secrets/
+
 # Swift build artifacts
 kernora-native-mac/.build/
 
 # Hypothesis testing artifacts
 .hypothesis/
 
-# Model weights and adapters — never commit; ship via release artifacts only
-*.safetensors
-*.gguf
-*.bin
-*.pt
-*.pth
-*.onnx
 adapters/
-models/
 
-# Local Kernora runtime state (factbook DB, session logs, user config)
-.kernora/
-*.sqlite
-*.sqlite3
-*.db
+# Generated SFT/Q&A corpora — regenerate via scripts/build_qa_corpus.py
+data/qa-*.jsonl
+data/qa-*-stats.json
+
+# Personal / non-product content — never commit
+docs/RESUME-*.md
+docs/RESUME-*.docx
+docs/Mihir-Choudhary-*
+docs/SUBSTACK-FACTLET-PROTOCOL-LAUNCH.md
+docs/LINKEDIN-FACTLET-LAUNCH-POSTS.md
+docs/X-THREAD-FACTLET-LAUNCH.md
+docs/LAUNCH-PLAN-FACTLET-PROTOCOL.md
+
+# Empty/junk Xcode placeholders
+kernora-misc/Untitled.swift
+
+# --- Added 2026-05-19 (session housekeeping) ---
+
+# Firebase Hosting deploy cache (regenerable per deploy)
+.firebase/hosting.*.cache
+
+# Claude Code agent worktrees (transient, per-task copies of repo)
+.claude/worktrees/
+
+# persona-walk visual outputs — Retina PNG screenshots and console
+# recordings; >5 MB per file, bad fit for git history. Text reports
+# (citation-strip-*.md) ARE tracked under benchmarks/persona-walk/.
+benchmarks/persona-walk/visual-*/
+benchmarks/persona-walk/vsix-console-*/
+
+# TypeScript incremental build info (regenerates on every build)
+*.tsbuildinfo
+
+# kernora-misc — junk dir / scratch space
+kernora-misc/
+
+# sync.sh authoritatively overwrites bundled/* on every run.
+# NEVER track bundled artifacts; edit ROOT-level files and let sync.sh
+# regenerate. (Build constraint in CLAUDE.md.)
+kiro-extension/bundled/CLAUDE.md
+kiro-extension/bundled/test_*.py
+
+# SFT corpora — same pattern as qa-* above; regenerable from scripts
+# (do not commit large training data to repo; ~3 MB total today)
+data/sft-*.jsonl
+data/sft-*-stats.json
+
+# Harness per-run pending factlet candidates (test artifacts; runtime-generated)
+.nora/pending/run-*-candidates.yaml
+
+# Root-level scratch / demo / capture scripts — untracked session artifacts.
+# These must never enter git or the VSIX bundle. sync.sh denylist excludes
+# them from bundled/; .vscodeignore provides defense-in-depth at vsce.
+# NOTE: seed_demo_factbook.py and capabilities.py are EXCLUDED here because
+# they are tracked files (legitimate project files).
+/_capture_demo.py
+/_demo_cast_run.py
+/_record.py
+/_seed_temp.py
+/run_demo_option1.py
+/verify_demo_drilldown.py
+/verify_demo_render.py
+
+# live recurrence telemetry — session snippets stay local (PII)
+.nora/recurrence-events.jsonl
+.nora/recurrence-watch-state.json
