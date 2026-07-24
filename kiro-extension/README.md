@@ -1,141 +1,92 @@
-# Kernora — AI Work Intelligence
+# Nora — grounding & verification for AI work
 
-Kernora runs silently alongside your AI coding tools and turns every session into compounding intelligence. Patterns, decisions, and bugs are extracted into a local database and injected back into your agent's context automatically. Every session makes the next one smarter.
+**Turn your rules, facts & standards into the rails your AI runs on.**
 
-Your **AI Leverage Score** — a composite metric of prompt quality, context injection hit rate, decision acceptance, and pattern accumulation — starts at 1.0x and compounds toward 5.0x as Kernora learns your codebase.
+Nora captures decisions as cited factlets, keeps them current, and applies them in your AI tools — Claude Code, Cursor, Kiro, Claude Desktop, and Antigravity. Before the model writes, grounding injects the facts that govern the work. After it writes, verification checks the output against those same facts.
 
-No cloud. No API key required on Mac. Zero bytes sent to Kernora servers.
+Built on the open [Factlet protocol](https://factlet.ai) — git-native, vendor-neutral, W3C PROV-O lineage.
+
+## What this extension does (v2.8.1)
+
+| Capability | What happens |
+|---|---|
+| **Grounding** | On relevant turns, Nora injects matching factlets from your project's factbook before the model answers. Citations show which fact was used. |
+| **Point-of-action enforcement** | Pre-write MUST-NOT checks block tool calls that violate directive factlets (e.g. "MUST NOT hardcode founder-specific data") before they run. A post-output secret scanner warns when tool output accidentally prints secrets. |
+| **Verification / reinforced trust** | Factlets carry a trust basis (`execution-proof`, `human-confirmed`, or `agent-asserted`). Reinforced / in-use state tracks citations that hold up in later work; `verified` stays reserved for execution proof or human confirmation. |
+| **Directive factlets** | Factlets are actionable (do / do-not / check), not bare descriptions — so grounding and MUST-NOT enforcement have something to enforce. |
+
+Same factbook everywhere. Switch tools; the rails stay.
 
 ## Install
 
-**VS Code / Kiro / Cursor:**
-Install from the Marketplace, or install the `.vsix` directly:
-Extensions → Install from VSIX → select kernora-*.vsix
+### 1. Install the Kernora backend first
 
-Kernora bootstraps automatically — creates a Python venv, installs deps, starts the dashboard at localhost:2742.
+The desktop app and this extension expect the backend under `~/.kernora/`. Install it once per machine:
 
-**Claude Code:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kernora-ai/nora/main/install.sh | bash
+curl -fsSL https://kernora.ai/install | bash
 ```
 
-**First run:**
-```
-nora scan ~/code/your-project
-```
-Seeds your database from git history so Kernora has context from session one.
+That creates the local venv, registers MCP where it can, and installs session hooks. The desktop app will refuse to start until this step is done.
 
-## Dashboard
+**Tiers (fail closed):** Free / Lite exposes **15 MCP tools**. Pro exposes the full surface (**62 MCP tools**). If Nora cannot prove your tier, it runs the 15-tool Lite surface — it never guesses upward. Call `nora_help` in chat to see what's active for you.
 
-Open http://localhost:2742 to see:
+### 2. Install this extension
 
-| Tab | What it shows |
-|-----|--------------|
-| **Home** | AI Leverage Score, loop health, top projects, rule suggestions |
-| **Projects** | Per-project AI metrics, patterns, decisions, bugs |
-| **Activity** | Session history with outcome indicators |
-| **Coach** | AI Leverage sparkline, coaching notes, certificate export |
-| **Knowledge** | Best practices, playbooks, anti-patterns |
-| **Memory** | Context injection feed, steering file viewer |
-| **Decisions** | Searchable architectural decisions |
-| **Bugs** | Bug inventory with severity, fix suggestions, mark resolved |
-| **Settings** | LLM provider config, local AI status |
+**VS Code:** Marketplace → search **Kernora**, or:
 
-## AI Leverage Score
-
-```
-AI Leverage = 1.0 + (composite_quality × 4.0)
-
-composite_quality = (prompt_quality × 0.4)
-                  + (injection_hit_rate × 0.3)
-                  + (decision_acceptance_rate × 0.2)
-                  + (pattern_accumulation_rate × 0.1)
+```bash
+code --install-extension Kernora.kernora
 ```
 
-| Score | Label | What it means |
-|-------|-------|--------------|
-| 1.0–2.0 | Early | AI isn't helping much yet |
-| 2.0–3.0 | Developing | Getting value, room to grow |
-| 3.0–4.0 | Strong | Measurably effective AI usage |
-| 4.0–5.0 | Excellent | Elite AI collaboration |
+**Cursor / Kiro:** side-load the same extension (Extensions → Install from VSIX), or install from the Marketplace where available.
 
-Export your score as a shareable certificate from the Coach tab.
+**Claude Code / Claude Desktop:** the install script above registers Nora as a local MCP server. Restart the agent; factbook tools appear.
 
-## What You Can Say to Nora
+**First project:**
 
-All 18 tools are available as natural-language commands in your IDE's AI chat.
+```bash
+cd ~/code/your-project
+kernora generate   # emit CLAUDE.md / .cursorrules / steering from the factbook
+```
 
-### Explore Your History
+Open the project in your IDE. Grounding fires on relevant turns when a factbook exists (cold-start can seed candidates from the repo on first session).
 
-| Command | What It Does |
-|---------|-------------|
-| `nora stats` | Session count, token usage, model breakdown over time |
-| `nora search <query>` | Full-text search across patterns, decisions, bugs |
-| `nora session <id>` | Full detail on a specific session |
+Dashboard (optional): [http://localhost:2742](http://localhost:2742).
 
-### Learn From Your Codebase
+## Privacy — local-first, zero egress by default
 
-| Command | What It Does |
-|---------|-------------|
-| `nora patterns` | Recurring engineering patterns from your sessions |
-| `nora decisions` | Architectural decisions with rationale |
-| `nora bugs` | Past bugs with fix suggestions and severity |
-| `nora skills` | Distilled team methodology — engineering rules and playbooks |
-| `nora scan <path>` | Import a git repo's history (run once per project) |
+- **0 bytes to Kernora servers.** Telemetry is off by default on every tier (v2.8).
+- Free / Lite is local-stdio only. Pro+ can opt in to sync to **your** S3 (your bucket, your keys) — off by default.
+- Data lives in `~/.kernora/` and `<project>/.nora/` on your machine.
+- Verify: `kernora network-check` (AST audit of hot-path modules). Or run `tcpdump` yourself.
 
-### Quality & Reviews
+See [kernora.ai/security](https://kernora.ai/security.html).
 
-| Command | What It Does |
-|---------|-------------|
-| `nora pe-review <focus>` | Principal Engineer 4-tier code audit |
-| `nora coe <issue>` | Blameless root-cause investigation (5 Whys) |
-| `nora coe product <issue>` | Product COE — why a feature shipped wrong |
-| `nora retro` | Engineering retrospective with git velocity metrics |
-| `nora scope <task>` | Validate a task against project history before starting |
+## Measured (open methodology)
 
-### Factory & Coaching
+Without a factbook, three frontier models contradicted documented team decisions **12 times in 18 answers**. With one: **0 across 36**. Counted from published raw runs — [factlet-ai/evals](https://github.com/factlet-ai/evals) (N=6 tasks, 2026-05). Recount it yourself.
 
-| Command | What It Does |
-|---------|-------------|
-| `nora sofac` | Software Factory health — what shipped, what's pending (GREEN/YELLOW/RED) |
-| `nora inventory` | Feature audit: SHIP/POLISH/WIRE/BLOCKER |
-| `nora coach` | AI Leverage coaching — patterns, anti-patterns, before/after examples |
-| `nora onboard` | Onboard a new developer with your team's methodology |
+Grounding latency is hard-capped at **250ms** in the hook — over-budget lookups are skipped.
 
-### Help
+## Day-to-day commands
 
-| Command | What It Does |
-|---------|-------------|
-| `nora help` | Full tool reference with examples |
+In IDE chat (MCP), start with:
 
-## LLM Provider Priority
+| Say | What it does |
+|---|---|
+| `nora_help` | Lists the MCP tools active on your tier |
+| `nora_search <query>` | Search patterns, decisions, bugs |
+| `nora_factbook_view` | Show the active factbook |
+| `nora_context_for_task <task>` | Pull relevant facts before you start work |
+| `nora_generate` | Re-emit steering files from the factbook |
 
-Nora tries these in order — the first available one wins:
-
-1. **IDE LLM** (VS Code, Kiro, Cursor) — zero config
-2. **Apple FoundationModels** (macOS 26+) — on-device, zero cost
-3. **MLX-LM** (macOS 14+) — on-device, ~2GB one-time download
-4. **BYOK** — Anthropic, OpenAI, Google, Bedrock, Grok
-5. **Ollama** — local, free
-
-On a modern Mac, Kernora works with no API key.
-
-## Privacy
-
-All data stays in `~/.kernora/echo.db` on your machine. Zero bytes reach Kernora servers in BYOK mode. Analysis uses your own API key — the same call you'd make directly.
-
-## Architecture
-
-- **Database:** `~/.kernora/echo.db` (SQLite, WAL mode)
-- **Dashboard:** Flask + HTMX at `localhost:2742`
-- **MCP server:** 18 tools via stdio JSON-RPC
-- **Hooks:** 6 Claude Code hooks, 5 Kiro hooks
-- **Steering:** Auto-generated markdown files injected into AI context
-- **Config:** `~/.kernora/config.toml`
+Shell: `kernora help`, `kernora tour`, `kernora network-check`.
 
 ## Links
 
 - Website: [kernora.ai](https://kernora.ai)
+- Docs: [kernora.ai/docs](https://kernora.ai/docs.html)
+- Security: [kernora.ai/security](https://kernora.ai/security.html)
 - Source: [github.com/kernora-ai/nora](https://github.com/kernora-ai/nora)
 - Issues: [github.com/kernora-ai/nora/issues](https://github.com/kernora-ai/nora/issues)
-- X / Twitter: [@KernoraAI](https://x.com/KernoraAI)

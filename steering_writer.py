@@ -33,6 +33,21 @@ from pathlib import Path
 DB_PATH = Path.home() / ".kernora" / "echo.db"
 GLOBAL_STEERING = Path.home() / ".kiro" / "steering"
 
+
+def _find_git_repo_root(start: Path | None = None) -> Path:
+    """Walk up from `start` (default cwd) looking for a .git directory.
+
+    Returns the nearest git repo root, or the starting directory if none
+    is found (so callers always get a writeable directory — graceful
+    degrade rather than raising in the OSS install path).
+    """
+    cur = (start or Path.cwd()).resolve()
+    for parent in (cur, *cur.parents):
+        if (parent / ".git").exists():
+            return parent
+    return cur
+
+
 # Clean up old nora-* filenames on import
 def _cleanup_old_filenames():
     """Remove old nora-prefixed steering files if they exist."""
